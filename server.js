@@ -2,9 +2,11 @@
 const {WebSocketServer}=require('ws');
 const fs=require('fs');
 const crypto=require('crypto');
+const http=require('http');
 
 const MAX=9,DUR=120,MTR=0.03,LANES=3,RANKCP=[40,25,15,8,0,-8,-15,-22,-30];
 const COLS=['#3aa0ff','#ffd23f','#8be04a','#ff7ab6','#c9d4de','#ff9040','#e05ec0','#7ae0d0','#ffa07a'];
+const BOTNAMES=['RAYO','NITRA','KEKO','MORA','PIXEL','RUDO','VEGA','SOMBRA','COHETE','PISTON','DIESEL','NEON','MISIL','GACEL','TIGRE','KART','TURBO','FANT'];
 const BAD_NAME_PARTS=['PUT','VERG','MIER','CULO','PENE','PITO','JODE','MAME','TETA','SEXO','PORN','XXX','FUCK','SHIT','BITCH','NAZI','KKK','HITL'];
 const BAD_NAME_EXACT=['ADMIN','MOD','NULL','UNDEF','BOT','CPU','SERVER','SPEED'];
 
@@ -31,13 +33,24 @@ const sanitizeRoom=n=>typeof n!=='string'?'SALA':n.replace(/[<>"'&]/g,'').trim()
 const send=(ws,o)=>{
  if(ws.readyState===1)try{ws.send(JSON.stringify(o));}catch(e){}
 };
-function readArray(file){
- try{
-  const r=JSON.parse(fs.readFileSync(file,'utf8'));
-  return Array.isArray(r)?r:[];
- }catch(e){return [];}
+const UP_URL=process.env.UPSTASH_REDIS_REST_URL;
+const UP_TOK=process.env.UPSTASH_REDIS_REST_TOKEN;
+async function redisCmd(cmd){
+ const r=await fetch(UP_URL,{method:'POST',headers:{Authorization:'Bearer '+UP_TOK,'Content-Type':'application/json'},body:JSON.stringify(cmd)});
+ return (await r.json()).result;
 }
-function writeJson(file,data){
+async function loadArray(key,file){
+ if(!UP_URL||!UP_TOK)return readFileArray(file||key+'.json');
+ try{const v=await redisCmd(['GET',key]);return v?JSON.parse(v):[];}catch(e){return readFileArray(file||key+'.json');}
+}
+function saveArray(key,data,file){
+ if(!UP_URL||!UP_TOK){writeFileJson(file||key+'.json',data);return;}
+ redisCmd(['SET',key,JSON.stringify(data)]).catch(()=>writeFileJson(file||key+'.json',data));
+}
+function readFileArray(file){
+ try{const r=JSON.parse(fs.readFileSync(file,'utf8'));return Array.isArray(r)?r:[];}catch(e){return [];}
+}
+function writeFileJson(file,data){
  try{fs.writeFileSync(file,JSON.stringify(data));}catch(e){}
 }
 
@@ -45,13 +58,23 @@ function createServer(opts={}){
  const PORT=opts.port??process.env.PORT??8787;
  const rankFile=opts.rankFile||process.env.RANK_FILE||'rank.json';
  const profilesFile=opts.profilesFile||process.env.PROFILES_FILE||'profiles.json';
- const wss=new WebSocketServer({port:PORT,maxPayload:16384});
- let GLOBAL=readArray(rankFile),PROF=readArray(profilesFile);
- const saveRank=()=>writeJson(rankFile,GLOBAL);
- const saveProf=()=>writeJson(profilesFile,PROF);
+ const httpServer=http.createServer((req,res)=>{
+  res.writeHead(200,{'content-type':'text/plain'});
+  res.end('SPEED RIVALS OK');
+ });
+ const wss=new WebSocketServer({server:httpServer,maxPayload:16384});
+ httpServer.listen(PORT,()=>{if(opts.log)console.log('SPEED RIVALS online en puerto '+httpServer.address().port);});
+ let GLOBAL=[],PROF=[];
+ (async()=>{
+  GLOBAL=await loadArray('rank',rankFile);
+  PROF=await loadArray('profiles',profilesFile);
+  if(opts.log)console.log('Datos cargados:',GLOBAL.length,'rank /',PROF.length,'perfiles');
+ })();
+ const saveRank=()=>saveArray('rank',GLOBAL,rankFile);
+ const saveProf=()=>saveArray('profiles',PROF,profilesFile);
  const rooms=new Map();
  const getRoom=c=>{
-  if(!rooms.has(c))rooms.set(c,{code:c,name:c==='PUB'?'PUBLICA':c,priv:false,players:[],racing:false,seed:0,tEnd:0,cp:{},cpName:{}});
+  if(!rooms.has(c))rooms.set(c,{code:c,name:c==='PUB'?'PUBLICA':c,priv:false,players:[],racing:false,seed:0,tEnd:0,cp:{},cpName:{},bots:[]});
   return rooms.get(c);
  };
  getRoom('PUB');
@@ -70,23 +93,32 @@ function createServer(opts={}){
   },30000),
   setInterval(()=>{
    rooms.forEach(R=>{
-    R.players.forEach(p=>send(p.ws,{type:'room',id:p.id,racing:R.racing,code:R.code,p:R.players.map(q=>({id:q.id,name:q.name,col:q.col,d:Math.round(q.d),lane:q.lane,alive:q.alive}))}));
+    if(R.racing)R.bots.forEach(b=>{b.d+=(260+b.skill*340)*0.12;});
+    const roomRank=Object.keys(R.cp).map(id=>({name:R.cpName[id],cp:R.cp[id]})).sort((a,b)=>b.cp-a.cp);
+    R.players.forEach(p=>send(p.ws,{type:'room',id:p.id,racing:R.racing,code:R.code,priv:R.priv,roomName:R.name,roomRank,
+     p:R.players.map(q=>({id:q.id,name:q.name,col:q.col,d:Math.round(q.d),lane:q.lane,alive:q.alive}))
+      .concat(R.bots.map(b=>({id:b.id,name:b.name,col:b.col,d:Math.round(b.d),lane:1,alive:true})))}));
     const al=R.players.filter(p=>p.alive);
     if(!R.racing&&R.players.length>=2){
      R.racing=true;
      R.seed=(Math.random()*1e9)|0;
      R.tEnd=Date.now()+DUR*1000;
      R.players.forEach((p,i)=>{p.alive=true;p.d=0;p.lane=i%LANES;});
+     R.bots=[];
+     if(R.code==='PUB'){
+      for(let i=R.players.length;i<MAX;i++)R.bots.push({id:'bot'+i,name:BOTNAMES[(Math.random()*BOTNAMES.length)|0],col:COLS[i%COLS.length],d:0,alive:true,skill:0.7+Math.random()*0.3});
+     }
      R.players.forEach(p=>send(p.ws,{type:'start',seed:R.seed}));
     }
     else if(R.racing&&(Date.now()>R.tEnd||al.length<=1)){
-     const rank=[...R.players].sort((a,b)=>b.d-a.d);
+     const rank=[...R.players,...R.bots].sort((a,b)=>b.d-a.d);
      rank.forEach((p,i)=>{
       const cp=RANKCP[i]||0;
-      if(cp){R.cp[p.id]=Math.max(0,(R.cp[p.id]||0)+cp);R.cpName[p.id]=p.name;}
+      if(cp&&!String(p.id).startsWith('bot')){R.cp[p.id]=Math.max(0,(R.cp[p.id]||0)+cp);R.cpName[p.id]=p.name;}
      });
      const roomRank=Object.keys(R.cp).map(id=>({name:R.cpName[id],cp:R.cp[id]})).sort((a,b)=>b.cp-a.cp);
      R.players.forEach(p=>send(p.ws,{type:'end',code:R.code,rank:rank.map(q=>({id:q.id,name:q.name,d:Math.round(q.d*MTR)})),roomRank}));
+     R.bots=[];
      R.racing=false;
     }
     if(R.code!=='PUB'&&!R.players.length)rooms.delete(R.code);
@@ -111,7 +143,7 @@ function createServer(opts={}){
   function leave(){
    if(p.R){
     p.R.players=p.R.players.filter(q=>q!==p);
-    if(!p.R.players.length)p.R.racing=false;
+    if(!p.R.players.length){p.R.racing=false;p.R.bots=[];}
     p.R=null;
    }
   }
@@ -147,6 +179,8 @@ function createServer(opts={}){
     join(R,m.name);
     send(ws,{type:'joined',code:'PUB'});
    }
+   if(m.type==='setpriv'&&p.R)p.R.priv=!!m.priv;
+   if(m.type==='leave'){leave();send(ws,{type:'left'});}
    if(m.type==='stats'){
     const name=sanitizeName(m.name);
     let pr=PROF.find(x=>x.name===name);
@@ -194,19 +228,19 @@ function createServer(opts={}){
   rooms,
   get globalRank(){return GLOBAL;},
   get profiles(){return PROF;},
-  address:()=>wss.address(),
+  httpServer,
+  address:()=>httpServer.address(),
   close:()=>new Promise(resolve=>{
    timers.forEach(clearInterval);
    wss.clients.forEach(client=>client.terminate());
-   wss.close(()=>resolve());
+   wss.close(()=>httpServer.close(()=>resolve()));
   })
  };
 }
 
 if(require.main===module){
- const app=createServer();
+ const app=createServer({log:true});
  process.on('uncaughtException',e=>console.error('uncaught',e));
- app.wss.on('listening',()=>console.log('SPEED RIVALS online en puerto '+app.address().port));
 }
 
 module.exports={

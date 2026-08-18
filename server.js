@@ -56,7 +56,7 @@ function createServer(options={}){
  }
  function makeCode(){let code;do{code=Math.random().toString(36).slice(2,8).toUpperCase();}while(rooms.has(code));return code;}
  function roomPayload(R,p){
-  const humans=R.players.map(q=>({id:q.id,name:q.name,col:q.col,d:Math.round(q.d),lane:q.lane,alive:q.alive,cp:R.cp[q.id]||0}));
+  const humans=R.players.map(q=>({id:q.id,name:q.name,col:q.col,d:Math.round(q.d),lane:q.lane,alive:q.alive,cp:R.cp[q.id]||0,llanta:q.llanta,gadget:q.gadget,abil:q.abil}));
   const bots=R.bots.map(b=>({id:b.id,name:b.name,col:b.col,d:Math.round(b.d),lane:b.lane,alive:b.alive,cp:0}));
   return {type:'room',id:p.id,racing:R.racing,code:R.code,mode:R.mode,host:R.host,manual:R.manual,priv:R.priv,roomName:R.name,p:humans.concat(bots)};
  }
@@ -138,6 +138,7 @@ function createServer(options={}){
    }
    if(m.type==='leave'){leave(p);return send(ws,{type:'left'});}
    const R=p.R;if(!R)return;
+   if(m.type==='loadout'){const s=v=>typeof v==='string'?v.slice(0,16):null;p.llanta=s(m.llanta);p.gadget=s(m.gadget);p.abil=s(m.abil);return;}
    if(m.type==='setmode'&&R.host===p.id&&!R.racing&&['normal','subita','supervivencia'].includes(m.mode)){R.mode=m.mode;return broadcastRoom(R);}
    if(m.type==='setpriv'&&R.host===p.id&&!R.racing){R.priv=!!m.priv;return broadcastRoom(R);}
    if(m.type==='startRace'&&R.host===p.id&&R.manual&&!R.racing&&R.players.length>=2)return startRace(R);

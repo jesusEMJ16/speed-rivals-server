@@ -1,0 +1,6 @@
+node_modules/
+profiles.json
+rank.json
+*.log
+*.pid
+.env

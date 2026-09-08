@@ -1,7 +1,9 @@
 'use strict';
 
 const fs=require('node:fs');
+const http=require('node:http');
 const {WebSocketServer}=require('ws');
+let Redis=null;try{({Redis}=require('@upstash/redis'));}catch(e){/* opcional: si no esta instalado, corre sin persistencia permanente */}
 
 const MAX=9,LANES=3,DUR=120000;
 const RANK_CP=[40,25,15,8,0,-8,-15,-22,-30];
@@ -41,13 +43,31 @@ function createServer(options={}){
  const rankFile=options.rankFile||'rank.json',profilesFile=options.profilesFile||'profiles.json';
  let RANK=readJson(rankFile,[]),PROF=readJson(profilesFile,[]);
  const rooms=new Map();let serial=0;
- const wss=new WebSocketServer({port,maxPayload:16384});
+ // --- Persistencia permanente en Upstash Redis (sobrevive reinicios/redeploys de Render) ---
+ const redis=(Redis&&process.env.UPSTASH_REDIS_REST_URL&&process.env.UPSTASH_REDIS_REST_TOKEN)
+  ?new Redis({url:process.env.UPSTASH_REDIS_REST_URL,token:process.env.UPSTASH_REDIS_REST_TOKEN}):null;
+ let profT=null,rankT=null;
+ function saveProf(){writeJson(profilesFile,PROF);if(redis){clearTimeout(profT);profT=setTimeout(()=>redis.set('sr:prof',PROF).catch(()=>{}),1500);}}
+ function saveRank(){writeJson(rankFile,RANK);if(redis){clearTimeout(rankT);rankT=setTimeout(()=>redis.set('sr:rank',RANK).catch(()=>{}),1500);}}
+ if(redis)(async()=>{try{const [r,pf]=await Promise.all([redis.get('sr:rank'),redis.get('sr:prof')]);
+   if(Array.isArray(r))RANK=r;if(Array.isArray(pf))PROF=pf;
+   console.log('Redis OK: '+PROF.length+' perfiles, '+RANK.length+' records km cargados');}catch(e){console.log('Redis load error: '+e.message);}})();
+ else console.log('AVISO: sin Redis (falta UPSTASH_REDIS_REST_URL / _TOKEN). Los datos NO seran permanentes.');
+ // --- Servidor HTTP con /health para el ping keep-alive (evita que Render duerma el servicio) ---
+ const httpServer=http.createServer((req,res)=>{
+  const u=(req.url||'').split('?')[0];
+  if(u==='/health'||u==='/'){res.writeHead(200,{'content-type':'application/json','access-control-allow-origin':'*'});
+   return res.end(JSON.stringify({ok:true,profiles:PROF.length,records:RANK.length,redis:!!redis,up:Math.round(process.uptime())}));}
+  res.writeHead(404);res.end();
+ });
+ const wss=new WebSocketServer({server:httpServer,maxPayload:16384});
+ httpServer.listen(port,()=>console.log('SPEED RIVALS online en puerto '+port));
 
  function send(ws,message){if(ws&&ws.readyState===ws.OPEN){try{ws.send(JSON.stringify(message));}catch(e){}}}
  function profile(name){
   const safe=sanitizeName(name);let p=PROF.find(row=>row.name===safe);
-  if(!p){p={name:safe,cp:0,best1p:0};PROF.push(p);}
-  p.cp=int(p.cp,0,1000000);p.best1p=int(p.best1p,0,1000000);return p;
+  if(!p){p={name:safe,cp:0,best1p:0,bestVs:0};PROF.push(p);}
+  p.cp=int(p.cp,0,1000000);p.best1p=int(p.best1p,0,1000000);p.bestVs=int(p.bestVs,0,1000000);return p;
  }
  function getRoom(code){
   const key=String(code||'PUB').toUpperCase();
@@ -94,7 +114,7 @@ function createServer(options={}){
    pr.cp=Math.max(0,pr.cp+delta);R.cp[p.id]=pr.cp;
    send(p.ws,{type:'end',rank:rank.map(q=>({id:q.id,name:q.name,d:Math.round(q.d)})),roomRank:rank.map(q=>({name:q.name,cp:q.id.startsWith('bot')?0:(R.cp[q.id]||0)}))});
   });
-  writeJson(profilesFile,PROF);R.bots=[];broadcastRoom(R);
+  saveProf();R.bots=[];broadcastRoom(R);
  }
  function publicRooms(){return [...rooms.values()].filter(R=>R.code!=='PUB'&&!R.priv&&!R.racing&&R.players.length).map(R=>({code:R.code,name:R.name,n:R.players.length,max:MAX}));}
 
@@ -122,7 +142,7 @@ function createServer(options={}){
    if(m.type==='getrank')return send(ws,{type:'rank',rank:RANK});
    if(m.type==='getstats')return send(ws,{type:'profiles',profiles:PROF});
    if(m.type==='stats'){
-    const pr=profile(m.name);pr.cp=int(m.cp,0,1000000);pr.best1p=int(m.best1p,0,1000000);p.name=pr.name;writeJson(profilesFile,PROF);return send(ws,{type:'profiles',profiles:PROF});
+    const pr=profile(m.name);pr.cp=int(m.cp,0,1000000);pr.best1p=Math.max(pr.best1p,int(m.best1p,0,1000000));pr.bestVs=Math.max(pr.bestVs,int(m.bestVs,0,1000000));p.name=pr.name;saveProf();return send(ws,{type:'profiles',profiles:PROF});
    }
    if(m.type==='list')return send(ws,{type:'rooms',rooms:publicRooms()});
    if(m.type==='create'){
@@ -147,15 +167,15 @@ function createServer(options={}){
    if(m.type==='score'){
     const item={name:sanitizeName(m.name),km:Math.max(0,Math.min(10000,+m.km||0)),time:int(m.time,0,3600),pts:int(m.pts,0,1000000)};
     if(item.km<=0||item.time<=0||item.km*1000>item.time*500)return;
-    RANK.push(item);RANK.sort((a,b)=>b.km-a.km||b.pts-a.pts);RANK=RANK.slice(0,100);writeJson(rankFile,RANK);return send(ws,{type:'rank',rank:RANK});
+    RANK.push(item);RANK.sort((a,b)=>b.km-a.km||b.pts-a.pts);RANK=RANK.slice(0,100);saveRank();return send(ws,{type:'rank',rank:RANK});
    }
   });
   ws.on('close',()=>leave(p));
  });
- const close=async()=>{clearInterval(tick);for(const client of wss.clients){try{client.close();}catch(e){}}return new Promise(resolve=>wss.close(resolve));};
- return {wss,rooms,address:()=>wss.address(),close};
+ const close=async()=>{clearInterval(tick);for(const client of wss.clients){try{client.close();}catch(e){}}await new Promise(resolve=>wss.close(resolve));return new Promise(resolve=>httpServer.close(resolve));};
+ return {wss,rooms,httpServer,address:()=>httpServer.address(),close};
 }
 
-if(require.main===module){const app=createServer();app.wss.on('listening',()=>console.log('SPEED RIVALS online en puerto '+app.address().port));}
+if(require.main===module){createServer();}
 
 module.exports={createServer,cleanName,badName,sanitizeName,sanitizeRoom,constants:{MAX,LANES,DUR}};

@@ -16,6 +16,12 @@ One Node.js 22+ instance owns the rooms, race clocks, guest identities, and onli
 
 ## Protocol
 
+### Android App Links
+
+The Capacitor Android project uses application ID `solutions.moncadastudio.speedrivals`; version 5 adds an HTTPS `autoVerify` filter limited to `speed-rivals-server.onrender.com/invite/`. Configure `SR_ANDROID_CERT_SHA256` with the public SHA-256 certificate fingerprint from **Google Play App Signing** (32 colon-separated hex byte pairs; commas allow multiple release certificates). `/.well-known/assetlinks.json` serves the association as JSON, without redirects. Empty or malformed configuration returns 503 and an empty array; it never invents a trusted certificate. Until the domain is deployed and verified, invitation codes and the web fallback remain available. The local debug or upload certificate may differ from Play's signing certificate: see [Android's website association documentation](https://developer.android.com/training/app-links/configure-assetlinks).
+
+### Messages
+
 All frames are JSON with `type`. Send `hello {protocol:2, token?, name}` and await `welcome {protocol:2,id,token,profile,serverTime}` before actions. Guest identity follows the token, not the display name. Names support Unicode, max 24 code points. Invalid saved tokens return `INVALID_TOKEN`; do not silently erase an existing token on a temporary connection error.
 
 Lobby commands: `joinpub {mode}`, `create {roomName,priv,mode}`, `joinroom {code}`, `list`, `leave`, `setmode {mode}`, `setpriv {priv}`, `startRace`. Modes: `normal`, `subita`, `supervivencia`. Automatic queues start with exactly nine connected human identities; a tenth human gets a distinct queue, and modes never mix. Manual rooms need 2–9 connected people and host permission to start. Private rooms do not appear in `rooms` lists. Host transfers when the current host leaves or disconnects.

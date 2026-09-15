@@ -124,6 +124,13 @@ function createServer(options={}){
  function webPlayUrl(code){const fallback='/play/?room='+encodeURIComponent(code),raw=options.webPlayUrl||process.env.SR_WEB_PLAY_URL;if(!raw)return fallback;try{const u=new URL(raw);if(!['https:','http:'].includes(u.protocol))return fallback;u.searchParams.set('room',code);return u.href;}catch{return fallback;}}
  const escape=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const httpServer=http.createServer((req,res)=>{const route=(req.url||'').split('?')[0];
+  if(route==='/.well-known/assetlinks.json'){
+   if(req.method!=='GET'){res.writeHead(405,{'allow':'GET'});return res.end();}
+   const fingerprints=String(options.androidCertSha256??process.env.SR_ANDROID_CERT_SHA256??'').split(',').map(s=>s.trim().toUpperCase());
+   const valid=fingerprints.length>0&&fingerprints.every(s=>/^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s));
+   res.writeHead(valid?200:503,{'content-type':'application/json; charset=utf-8','cache-control':valid?'public, max-age=300':'no-store','x-content-type-options':'nosniff'});
+   return res.end(JSON.stringify(valid?[{relation:['delegate_permission/common.handle_all_urls'],target:{namespace:'android_app',package_name:'solutions.moncadastudio.speedrivals',sha256_cert_fingerprints:[...new Set(fingerprints)]}}]:[]));
+  }
   const publicName=route==='/play/'?'index.html':PUBLIC_FILES.find(name=>route==='/play/'+name);
   if(publicName){
    if(req.method!=='GET'){res.writeHead(405,{'allow':'GET'});return res.end();}

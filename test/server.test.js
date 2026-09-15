@@ -21,6 +21,16 @@ async function socket(url){
 async function guest(url,name='Guest',token){const s=await socket(url);s.send({type:'hello',protocol:2,name,token});s.welcome=await s.read('welcome');return s;}
 async function pair(url){const a=await guest(url,'阿娜'),b=await guest(url,'Jesús');a.send({type:'create',roomName:'Team',priv:true,mode:'normal'});const {code}=await a.read('created');b.send({type:'joinroom',code});await b.read('joined');return {a,b,code};}
 async function start(a,b){a.send({type:'startRace'});const m=await a.read('start');assert.deepEqual(await b.read('start'),m);await pause(35);return m;}
+
+test('Android association exposes only configured valid release fingerprints',async t=>{
+ const fingerprint=Array(32).fill('AB').join(':');
+ for(const [value,status] of [['',503],['not-a-certificate',503],[fingerprint,200]]){
+  const {url}=await boot(t,{androidCertSha256:value});const endpoint=url.replace('ws:','http:')+'/.well-known/assetlinks.json';
+  const res=await fetch(endpoint);assert.equal(res.status,status);assert.match(res.headers.get('content-type'),/application\/json/);
+  assert.deepEqual(await res.json(),status===200?[{relation:['delegate_permission/common.handle_all_urls'],target:{namespace:'android_app',package_name:'solutions.moncadastudio.speedrivals',sha256_cert_fingerprints:[fingerprint]}}]:[]);
+  assert.equal((await fetch(endpoint,{method:'POST'})).status,405);
+ }
+});
 test('Unicode names survive and no v1 ranking writes are permitted',async t=>{
  assert.equal(cleanName('  Jesús 東京  '),'Jesús 東京');
  const {url}=await boot(t),s=await socket(url);s.send({type:'stats',cp:999999});assert.equal((await s.read('err')).code,'AUTH_REQUIRED');

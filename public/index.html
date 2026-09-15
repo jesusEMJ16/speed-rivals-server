@@ -702,6 +702,121 @@ body.reduced-fx #banner.show {opacity:1;}
 
 </style>
 <style>
+/* Start grid: warm asphalt, painted cream, signal orange and rival mint.
+   Home-only rules keep the garage, race HUD and other sheets independent. */
+#menuOv{background:radial-gradient(ellipse at 15% 0,#343c35 0,transparent 60%),#090f11;padding:16px}
+#menuOv .homePanel{box-sizing:border-box;max-width:1060px;max-height:calc(100dvh - 32px);padding:26px;background:#121c20;border:1px solid #53615a;border-radius:3px;overflow-x:hidden;overflow-y:auto;box-shadow:0 22px 90px #0009;text-align:start}
+#menuOv .homeHeader{position:relative;gap:18px;padding-bottom:22px;margin-bottom:20px;border-bottom:1px solid #75827940}
+#menuOv .homeHeader::after{content:"";position:absolute;bottom:-2px;inset-inline-start:0;width:66px;height:4px;background:repeating-linear-gradient(90deg,#ffb448 0 16px,transparent 16px 22px)}
+#menuOv .homeBrand{font-size:49px;line-height:.82;letter-spacing:-.04em;color:#f3efdc;flex-shrink:0;text-shadow:3px 3px 0 #080e11;direction:ltr}
+#menuOv .homeBrand span{color:#ffb448}
+#menuOv .pilotBar{min-width:0;max-width:55%;gap:6px}
+#menuOv .pilotBar #nameBtn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px;border-radius:2px;background:#202e31;border-color:#64756a;color:#f3efdc}
+#menuOv .walletDisplay{min-width:0;max-width:100%;box-sizing:border-box;min-height:44px;background:#ffb448;color:#152020;border-radius:2px;font-weight:700;overflow-wrap:anywhere}
+#menuOv .homeGrid{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:26px}
+#menuOv .showroom{min-width:0;min-height:470px;padding:18px;display:flex;flex-direction:column;gap:0;border:1px solid #697269;border-radius:2px;background:radial-gradient(ellipse at 65% 30%,#54605255,transparent 65%),repeating-linear-gradient(0deg,#ffffff02 0 1px,transparent 1px 4px),#242d2b}
+#menuOv .showroom::before{inset:0 0 auto;height:6px;background:repeating-linear-gradient(110deg,#e6debd 0 20px,#303a35 20px 40px)}
+#menuOv .showroomHeader{z-index:2;gap:8px;color:#d4d7c6;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+#menuOv .showroom #garBtn{min-height:44px;padding:8px 10px;background:#111c1dc9;border:1px solid #9ca48a;border-radius:2px;font-size:12px;color:#f3efdc;flex-shrink:0}
+#menuOv .showroom #carPrev{position:relative;inset:auto;width:100%;height:230px;max-height:250px;flex:1;object-fit:contain;pointer-events:none}
+#menuOv .carDetails{margin:0;min-width:0;z-index:1}
+#menuOv #carPrevName{font:38px/1.05 'Racing Sans One',var(--ui-font,sans-serif);color:#f3efdc;margin:0 0 7px;overflow-wrap:anywhere}
+#menuOv #carPrevDesc{font-size:12px;line-height:1.5;max-width:28ch;min-height:0;margin:0;color:#c8cec1}
+#menuOv .showroom #changeCar{min-height:44px;margin:4px 0 0;padding:5px 0;gap:9px;color:#ffbd62;font-size:12px}
+#menuOv .carDetailsFoot{position:relative;z-index:2;display:block;margin:7px 0 0;padding-top:12px;border-top:1px solid #a8b09544;width:100%;min-width:0}
+#menuOv #menuLoadout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+#menuOv #menuLoadout .loadSlot{position:relative;box-sizing:border-box;width:100%;height:auto;min-height:68px;min-width:0;display:flex;flex-direction:column;gap:4px;padding:8px 3px;background:#101c1ed9;border:1px solid #798778;border-radius:3px;color:#d5dfca;box-shadow:0 3px 0 #0a1213;transition:background .15s,border-color .15s,transform .15s}
+#menuOv #menuLoadout .loadSlot:hover{background:#33443a;border-color:#ffbf62;transform:translateY(-2px)}
+#menuOv #menuLoadout .loadSlot:active{transform:translateY(2px)}
+#menuOv #menuLoadout .loadSlot canvas{width:29px;height:29px;display:none}
+#menuOv #menuLoadout .slotEmpty{height:29px;display:flex;align-items:center}
+#menuOv #menuLoadout .slotEmpty .mi{width:25px;height:25px}
+#menuOv #menuLoadout .lsLb{display:block;font-size:9px;font-weight:600;line-height:1.3;color:inherit;max-width:100%;overflow-wrap:anywhere}
+#menuOv #menuLoadout .slotPlus{position:absolute;inset-inline-end:5px;top:1px;color:#ffbd62;font-size:16px}
+#menuOv #menuLoadout .on{border-color:#a5d8b9;background:#22372d}
+#menuOv #menuLoadout .on canvas{display:block}#menuOv #menuLoadout .on .slotEmpty{display:none}
+#menuOv .playHeading{position:relative;align-items:flex-start;flex-wrap:wrap;margin:0 0 14px;gap:6px}
+#menuOv .playHeading h1{font-size:30px;line-height:1.1;color:#f3efdc;margin:0}
+#menuOv .playHeading #streakChip{position:static;padding:4px 0;color:#d0ba8f;white-space:normal;text-align:end;font-size:11px}
+#menuOv #streakChip::after{left:auto;right:auto;inset-inline-end:0;transform:none;box-sizing:border-box;width:max-content;max-width:min(240px,100%);white-space:normal;text-align:start}
+#menuOv #modeRow{grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;border:1px solid #59685f;border-radius:2px;background:#0c1518;padding:4px}
+#menuOv #modeRow .miniBtn{min-width:0;min-height:44px;font-size:11px;white-space:normal;overflow-wrap:anywhere;border-radius:1px;color:#c7d0c4}
+#menuOv #modeRow .miniBtn.sel{background:#36453c;box-shadow:inset 0 -3px #ffb448;color:#fff4d9}
+#menuOv #tagline{min-height:30px;margin:2px 0 14px;color:#adbcae;font-size:12px}
+#menuOv .raceChoices{gap:12px;margin-bottom:22px;grid-template-columns:repeat(2,minmax(0,1fr))}
+#menuOv .raceChoice{min-width:0;min-height:164px;padding:18px 16px 15px;text-align:start;background:#ffb448;color:#122024;border:1px solid #ffdb99;border-radius:2px;box-shadow:0 5px 0 #895624;isolation:isolate}
+#menuOv #vsBtn{background:#8cddc6;border-color:#c2f9e8;box-shadow:0 5px 0 #3f7b6b}
+#menuOv .raceChoice::after{z-index:-1;top:0;right:0;left:0;width:100%;height:100%;transform:none;background:repeating-linear-gradient(106deg,transparent 0 24px,#18302a17 24px 26px)}
+#menuOv .raceChoice>.mi{width:27px;height:27px;margin-bottom:22px}
+#menuOv .gridNumber{position:absolute;top:0;inset-inline-end:9px;z-index:-1;font:82px/1 'Racing Sans One';letter-spacing:-.06em;opacity:.17;direction:ltr}
+#menuOv .choiceTitle{font:30px/1.12 'Racing Sans One',sans-serif;white-space:normal;overflow-wrap:anywhere;position:relative}
+#menuOv .choiceBottom{font-size:11px;margin-top:12px;align-items:flex-end;overflow-wrap:anywhere}
+#menuOv .choiceBottom .mi{flex-shrink:0}
+#menuOv .homeProgress{gap:0;border-block:1px solid #66796d70;background:#1b292a}
+#menuOv .progressEntry{min-width:0;min-height:108px;border:0;border-radius:0;padding:16px 13px;background:transparent;text-align:start}
+#menuOv .progressEntry+ .progressEntry{border-inline-start:1px solid #66796d70}
+#menuOv .progressEntry:hover{background:#2b3b33}
+#menuOv .entryTitle{font-size:13px;align-items:flex-start;line-height:1.35;overflow-wrap:anywhere;color:#e4e8d7}
+#menuOv .entryTitle .mi{color:#ffc477}
+#menuOv .entryMeta{color:#aebdae;font-size:11px;overflow-wrap:anywhere}
+#menuOv .entryTrack{background:#0c181a;height:4px}#menuOv .entryTrack i{background:#90d6bc}
+#menuOv .entryBadge{position:static;display:inline-block;margin:-3px 0 7px}
+#menuOv .homeBottom{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 18px}
+#menuOv .menuNav{min-width:0;min-height:64px;padding:12px;border:1px solid #77b9a4;border-inline-start:4px solid #8cddc6;border-radius:2px;background:#244039;font-size:14px;color:#e2fff3;text-align:start;overflow-wrap:anywhere;gap:10px}
+#menuOv #rankBtn{border-color:#ad884c;border-inline-start-color:#ffb448;background:#3b3223;color:#fff0cb}
+#menuOv .menuNav:hover{filter:brightness(1.2)}#menuOv .menuNav .mi{width:25px;height:25px;color:#8cddc6}
+#menuOv #rankBtn .mi{color:#ffbc59}#menuOv .menuNav [data-copy]{min-width:0}
+#menuOv .menuNav .navArrow{width:15px;height:15px;margin-inline-start:auto;margin-inline-end:0}
+#menuOv .homeFooter{flex-wrap:wrap;margin-top:18px;padding-top:10px;border-color:#5d736442;color:#c7cbbb;font-size:12px}
+#menuOv .recordLine{flex-wrap:wrap}#menuOv #menuBest{color:#ffbc59;font-size:18px;font-variant-numeric:tabular-nums}
+#menuOv #helpBtn{min-height:44px;border:0;background:none;border-radius:2px;padding:5px 0;font-size:11px;color:#c1cec1}
+#menuOv button:focus-visible{outline:3px solid #fff1c8;outline-offset:3px}
+/* The shop must remain legible above the more prominent home artwork. */
+#garOv{background:#071014dc}#garOv>.panel{background:#12202a}
+@media(max-width:760px){
+ #menuOv{padding:10px max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left))}
+ #menuOv .homePanel{max-width:510px;max-height:calc(100dvh - 20px);padding:18px 15px}
+ #menuOv .homeHeader{padding-bottom:16px;margin-bottom:16px;gap:12px}
+ #menuOv .homeBrand{font-size:38px}
+ #menuOv .pilotBar{max-width:53%}#menuOv .pilotBar #nameBtn{font-size:11px;padding:6px 8px}
+ #menuOv .walletDisplay{font-size:12px;padding:8px}
+ #menuOv .homeGrid{display:flex;flex-direction:column;gap:22px}
+ #menuOv .showroom{display:grid;grid-template-columns:minmax(0,1fr) 43%;grid-template-rows:auto 1fr auto;gap:0;min-height:276px;padding:15px 12px 12px}
+ #menuOv .showroomHeader{grid-column:1/-1;font-size:10px}
+ #menuOv .showroom #garBtn{font-size:11px;padding:5px 8px}
+ #menuOv .showroom #carPrev{position:absolute;inset:auto;inset-inline-end:-35px;top:42px;width:230px;height:174px;max-height:none;z-index:0}
+ html[dir=rtl] #menuOv .showroom #carPrev{right:auto;left:-35px}
+ #menuOv .carDetails{grid-column:1;grid-row:2;margin:13px 0 0;align-self:center}
+ #menuOv #carPrevName{font-size:29px}#menuOv #carPrevDesc{font-size:11px;max-width:20ch}
+ #menuOv .carDetailsFoot{grid-column:1/-1;grid-row:3;align-self:end;margin-top:9px;padding-top:10px}
+ #menuOv #menuLoadout .loadSlot{min-height:62px;padding:6px 3px}
+ #menuOv .playHeading{margin-bottom:11px}#menuOv .playHeading h1{font-size:26px}
+ #menuOv #tagline{font-size:11px;margin-bottom:10px;min-height:26px}
+ #menuOv #modeRow .miniBtn{font-size:10px}
+ #menuOv .raceChoices{gap:10px;margin-bottom:19px}
+ #menuOv .raceChoice{min-height:142px;padding:14px 12px 12px}
+ #menuOv .raceChoice>.mi{width:24px;height:24px;margin-bottom:18px}
+ #menuOv .gridNumber{font-size:72px}#menuOv .choiceBottom{font-size:10px}
+ #menuOv .progressEntry{min-height:99px;padding:12px 9px}
+ #menuOv .entryTitle{font-size:12px;gap:6px}#menuOv .entryMeta{font-size:10px}
+ #menuOv .homeBottom{margin:0 0 13px;gap:10px}#menuOv .menuNav{min-height:56px;font-size:12px;padding:10px 8px;gap:7px}
+ #menuOv .homeFooter{margin-top:12px;font-size:10px}#menuOv #menuBest{font-size:15px}
+}
+@media(max-width:350px){
+ #menuOv .homePanel{padding:16px 11px}#menuOv .homeBrand{font-size:34px}
+ #menuOv .showroom{grid-template-columns:minmax(0,1fr) 38%}
+ #menuOv .showroom #carPrev{width:195px;inset-inline-end:-37px;top:50px}
+ html[dir=rtl] #menuOv .showroom #carPrev{right:auto;left:-37px}
+ #menuOv .playHeading h1{font-size:24px}#menuOv .entryTitle{font-size:11px}
+}
+@media(prefers-reduced-motion:no-preference){
+ #menuOv:not(.hidden) .showroom{animation:gridEnter .35s ease-out both}
+ #menuOv:not(.hidden) .homePlay{animation:gridEnter .4s .06s ease-out both}
+ @keyframes gridEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+}
+
+</style>
+<style>
 #onlineConnection{position:absolute;top:156px;right:max(14px,env(safe-area-inset-right));font:600 10px 'Chakra Petch','Race Global';color:#f2c77e;max-width:130px;text-align:end;pointer-events:none}
 #onlineConnection[data-online=true]{color:#9ed5c8}
 .pilotSlot>div{min-width:0}.pilotSlot strong{overflow-wrap:anywhere}.pilotSlot{min-width:0}
@@ -888,13 +1003,18 @@ button:focus-visible,summary:focus-visible,select:focus-visible{outline:2px soli
  <div class="homeGrid">
   <section class="showroom"><div class="showroomHeader"><span data-copy="yourCar">Tu coche</span><button id="garBtn"><span data-icon="garage"></span><span data-copy="garage">Garaje</span></button></div>
    <canvas id="carPrev" width="380" height="280" aria-label="Tu coche"></canvas>
-   <div class="carDetails"><div id="carPrevName"></div><p id="carPrevDesc"></p><div class="carDetailsFoot"><button id="changeCar"><span data-copy="change">Cambiar</span><span data-icon="arrow"></span></button><div id="menuLoadout"><div class="loadSlot" id="lsHabil"><canvas width="44" height="44"></canvas><div class="lsLb">HABILIDAD</div></div><div class="loadSlot" id="lsLlanta"><canvas width="44" height="44"></canvas><div class="lsLb">LLANTAS</div></div><div class="loadSlot" id="lsGadget"><canvas width="44" height="44"></canvas><div class="lsLb">GADGET</div></div></div></div></div>
+   <div class="carDetails"><div id="carPrevName"></div><p id="carPrevDesc"></p><button id="changeCar"><span data-copy="change">Cambiar</span><span data-icon="arrow"></span></button></div>
+   <div class="carDetailsFoot"><div id="menuLoadout">
+    <button type="button" class="loadSlot" id="lsHabil" data-shop="habil"><canvas width="44" height="44" aria-hidden="true"></canvas><span class="slotEmpty" data-icon="bolt" aria-hidden="true"></span><span class="lsLb">HABILIDAD</span><span class="slotPlus" aria-hidden="true">+</span></button>
+    <button type="button" class="loadSlot" id="lsLlanta" data-shop="llantas"><canvas width="44" height="44" aria-hidden="true"></canvas><span class="slotEmpty" data-icon="wheel" aria-hidden="true"></span><span class="lsLb">LLANTA</span><span class="slotPlus" aria-hidden="true">+</span></button>
+    <button type="button" class="loadSlot" id="lsGadget" data-shop="gadgets"><canvas width="44" height="44" aria-hidden="true"></canvas><span class="slotEmpty" data-icon="gadget" aria-hidden="true"></span><span class="lsLb">GADGET</span><span class="slotPlus" aria-hidden="true">+</span></button>
+   </div></div>
   </section>
   <section class="homePlay"><div class="playHeading"><h1 data-copy="choose">Elige tu carrera</h1><span id="streakChip"></span></div>
+   <div class="homeBottom"><button class="menuNav" id="netBtn2"><span data-icon="users"></span><span data-copy="rooms">Salas online</span><svg class="mi navArrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button><button class="menuNav" id="rankBtn"><span data-icon="trophy"></span><span data-copy="ranking">Ranking</span></button></div>
    <div id="modeRow"><button class="miniBtn" data-mode="normal">NORMAL</button><button class="miniBtn" data-mode="subita">SÚBITA</button><button class="miniBtn" data-mode="supervivencia">SUPERVIVENCIA</button></div><p id="tagline"></p>
    <div class="raceChoices"><button class="raceChoice" id="playBtn">1 jugador</button><button class="raceChoice" id="vsBtn">VS9</button></div>
    <div class="homeProgress"><button class="progressEntry" id="missBtn"><span class="entryTitle"><span data-icon="target"></span><span data-copy="missions">Misiones</span><span class="entryBadge" id="missionBadge" hidden></span></span><span class="entryMeta" id="missionSummary"></span><span class="entryTrack"><i id="homeMissionFill"></i></span></button><button class="progressEntry" id="passBtn"><span class="entryTitle"><span data-icon="medal"></span><span data-copy="pass">Pase de piloto</span></span><span class="entryMeta" id="passSummary"></span><span class="entryTrack"><i id="homePassFill"></i></span></button></div>
-   <div class="homeBottom"><button class="menuNav" id="netBtn2"><span data-icon="users"></span><span data-copy="rooms">Salas online</span><svg class="mi navArrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button><button class="menuNav" id="rankBtn"><span data-icon="trophy"></span><span data-copy="ranking">Ranking</span></button></div>
   </section>
  </div>
  <footer class="homeFooter"><span class="recordLine"><span data-icon="flag"></span><span data-copy="record">Récord</span><strong id="menuBest">0 m</strong></span><span class="footerLinks"><button id="helpBtn" data-copy="help">Ayuda y ajustes</button></span></footer>
@@ -1915,6 +2035,7 @@ window.MenuUI=(function(){
  'use strict';
  const $=id=>document.getElementById(id),say=(es,en)=>I18n.pick(es,en),number=n=>Math.floor(n).toLocaleString(lang);
  const paths={
+  wheel:'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18m0 5a4 4 0 1 1 0 8 4 4 0 0 1 0-8m0-5v5m0 8v5M3 12h5m8 0h5',gadget:'M5 4h5v10a2 2 0 0 0 4 0V4h5v10a7 7 0 0 1-14 0zm0 4h5m4 0h5',
   flag:'M4 21V3m0 1h15l-3 4 3 4H4',race:'M4 21V3m16 18V3M4 4h16v10H4m5-10v10m6-10v10M4 9h16',
   target:'M21 12a9 9 0 1 1-9-9m9 0-9 9m4-9h5v5M16 12a4 4 0 1 1-4-4',
   medal:'m7 3 5 8 5-8M5 3h4m6 0h4M12 11a5 5 0 1 1 0 10 5 5 0 0 1 0-10m0 3 1 2 2 0-1.5 1.5.5 2-2-1-2 1 .5-2L9 16h2z',
@@ -1939,7 +2060,7 @@ window.MenuUI=(function(){
  }
  function modes(){
   for(const [id,label,glyph] of [['playBtn',say('1 jugador','1 player'),'flag'],['vsBtn','VS9','race']]){
-   $(id).innerHTML=icon(glyph)+'<span class="choiceTitle">'+label+'</span><span class="choiceBottom"><span>'+T(modeName(G.mode)).charAt(0)+T(modeName(G.mode)).slice(1).toLowerCase()+'</span>'+icon('arrow')+'</span>';
+   $(id).innerHTML='<span class="gridNumber" aria-hidden="true">'+(id==='playBtn'?'01':'09')+'</span>'+icon(glyph)+'<span class="choiceTitle">'+label+'</span><span class="choiceBottom"><span>'+T(modeName(G.mode)).charAt(0)+T(modeName(G.mode)).slice(1).toLowerCase()+'</span>'+icon('arrow')+'</span>';
   }
   const desc={normal:[T('Objetos y habilidades · reglas clásicas'),T('Items and abilities · classic rules')],subita:[T('Una sola vida · cada movimiento cuenta'),T('One life · every move counts')],supervivencia:[T('Sin objetos · resiste un poco más'),T('No items · last a little longer')]};
   $('tagline').textContent=say(...desc[G.mode]);
@@ -1950,12 +2071,13 @@ window.MenuUI=(function(){
  }
  function showroom(){
   const cv=$('carPrev'),c=cv.getContext('2d'),w=cv.width,h=cv.height,car=carDef();c.clearRect(0,0,w,h);
-  c.save();c.translate(w*.52,h*.53);
-  c.strokeStyle='#90b5c526';c.lineWidth=1;c.beginPath();c.ellipse(0,3,115,94,-.15,0,Math.PI*2);c.stroke();
-  c.strokeStyle='#ffd08b66';c.lineWidth=2;c.beginPath();c.ellipse(0,3,115,94,-.15,Math.PI*.65,Math.PI*1.03);c.stroke();
-  c.strokeStyle='#bddae316';c.setLineDash([4,8]);c.beginPath();c.ellipse(0,3,131,107,-.15,0,Math.PI*2);c.stroke();c.setLineDash([]);
-  c.fillStyle='#030e1d35';c.beginPath();c.ellipse(13,25,50,88,-.2,0,Math.PI*2);c.fill();
-  RacePresentation.car(c,0,-2,-.17,car.col,66,2.7,car.id,0);c.restore();
+  c.save();c.translate(w*.53,h*.50);c.rotate(-.24);
+  // Painted starting box and tyre marks anchor the car to an actual surface.
+  c.fillStyle='#0003';for(const x of [-45,36])c.fillRect(x,-h,9,h*2);
+  c.strokeStyle='#f3edd178';c.lineWidth=3;c.beginPath();c.moveTo(-74,-84);c.lineTo(-74,94);c.lineTo(74,94);c.lineTo(74,-84);c.stroke();
+  c.fillStyle='#eadcb637';for(let y=-140;y<150;y+=28)c.fillRect(102,y,4,14);
+  c.fillStyle='#06090766';c.beginPath();c.ellipse(12,13,48,96,0,0,Math.PI*2);c.fill();
+  RacePresentation.car(c,0,-6,0,car.col,72,2.7,car.id,0);c.restore();
  }
  function renderHome(){
   copy();renderName();modes();syncMissions();
@@ -2056,10 +2178,15 @@ window.MenuUI=(function(){
  function searchState(preparing=botsPreparing){
   botsPreparing=preparing;copy();const n=Math.max(1,parseInt($('searchCount').textContent)||1);
   $('searchStatus').textContent=preparing?say('Preparando rivales','Preparing rivals'):say('Buscando pilotos','Finding drivers');
-  $('searchNote').textContent=preparing?say('Esta carrera se completará con rivales IA.','This race will be filled with AI rivals.'):NET.on?say('Buscando pilotos para llenar la parrilla.','Finding drivers to fill the grid.'):say('Intentando conectar. Si no hay conexión, podrás competir contra IA.','Connecting. If no connection is available, you can race AI drivers.');
-  $('searchGrid').innerHTML=Array.from({length:9},(_,i)=>'<div class="searchSeat '+(i<n?'filled':'')+'">'+icon(i<n?'car':'plus')+'<span>'+(i===0?say('TÚ','YOU'):i<n?(preparing?T('IA'):say('Piloto','Driver')):'—')+'</span></div>').join('');
+  $('searchNote').textContent=preparing?say('Preparando la parrilla','Preparing the grid'):say('Buscando pilotos para llenar la parrilla.','Finding drivers to fill the grid.');
+  $('searchGrid').innerHTML=Array.from({length:9},(_,i)=>'<div class="searchSeat '+(i<n?'filled':'')+'">'+icon(i<n?'car':'plus')+'<span>'+(i===0?say('TÚ','YOU'):i<n?say('Piloto','Driver'):'—')+'</span></div>').join('');
  }
  function setup(){
+  document.querySelectorAll('[data-shop]').forEach(button=>button.onclick=()=>{
+   uiClick();button.focus({preventScroll:true});renderGarage();setGarTab(button.dataset.shop);
+   $('garOv').classList.remove('hidden');
+   requestAnimationFrame(()=>{if($('garOv').classList.contains('hidden'))return;const tab=document.querySelector('.gTab[data-tab="'+button.dataset.shop+'"]');tab.focus({preventScroll:true});tab.scrollIntoView({block:'nearest'});});
+  });
   copy();$('missBtn').onclick=()=>{uiClick();$('missionNotice').textContent='';renderMissions();$('missionsOv').classList.remove('hidden');};
   $('missionsBack').onclick=()=>{uiClick();$('missionsOv').classList.add('hidden');$('missBtn').focus();};
   $('netBtn').onclick=$('netBtn2').onclick=()=>{uiClick();openRooms();};$('netBack').onclick=()=>{uiClick();cancelRooms();};
@@ -2275,7 +2402,6 @@ window.RaceSession=(function(){
   if(!race)return;
   const list=racers(),alive=list.filter(r=>r.alive),others=alive.filter(r=>!r.you),waiting=G.netBattle&&G.matchT<=0;
   $('battleStatus').textContent=waiting?say('Esperando el cierre del servidor','Waiting for server results'):!G.dead&&others.length===0?say('Último en pista · sigue sumando metros','Last on track · keep driving further'):alive.length+' '+say('en pista','still racing')+' · '+Math.max(0,Math.ceil(G.matchT))+' s';
-  if(!G.netBattle&&others.length)$('battleStatus').textContent=T('Rivales IA')+' · '+$('battleStatus').textContent;
   const target=list.find(r=>r.id===G.specTarget&&r.alive)||others[0];
   $('spectatorTitle').textContent=target?say('Viendo a ','Watching ')+target.name:say('Esperando resultados','Waiting for results');
   $('spectatorNote').textContent=say('Tu carrera: ','Your run: ')+Math.floor(G.meters||0).toLocaleString(lang)+' m · '+say('monedas y XP guardados','coins and XP saved');
@@ -2433,6 +2559,7 @@ window.OnlineClient=(function(){
    p.matchId=NET.matchId;p.seq=++seq;
   }
   if(p.type==='joinpub'||p.type==='create')p.mode=cleanMode(p.mode||G.mode);
+  if(p.type==='joinpub')p.waitedMs=searching?Math.max(0,Math.min(15000,performance.now()-searchStartedAt)):0;
   if(p.type==='stats'){delete p.cp;delete p.best1p;delete p.bestVs;}
   if(p.type==='score')return true;
   if(p.type==='leave'){expectedMatch=null;LS.set(pendingKey(),null);NET.matchId=null;NET.queue=false;NET.pending=[];pendingAttack=false;inventoryPending=false;}
@@ -2560,9 +2687,12 @@ window.OnlineClient=(function(){
   if(!G.item||pendingAttack||!NET.on||G.dead||G.count>0||G.resultsShown||now()>=NET.endsAt)return true;
   pendingAttack=true;netSend({type:'atk',kind:G.item});G.atkSent++;GameFeel.attack(G.item,false);return true;
  }
- function searchCopy(){if(!searching)return;
-  $('searchStatus').textContent=tr('Finding real players');
-  $('searchNote').textContent=tr(NET.on?'The race starts when 9 players are ready.':'Connecting…');
+ function searchCopy(){if(searching)MenuUI.searchState();}
+ function detachSearch(){
+  if(NET.on)raw({type:'leave'});
+  const socket=NET.ws;NET.ws=null;NET.on=false;NET.protocol=undefined;NET.room=null;NET.queue=false;NET.players=[];NET.pending=[];NET.matchId=null;expectedMatch=null;
+  clearTimeout(retryTimer);clearTimeout(handshake);clearInterval(heartbeat);socket?.close();
+  if($('onlineConnection'))$('onlineConnection').textContent='';
  }
  function tick(){
   if(NET.protocol===2&&G.netBattle&&['playing','paused'].includes(G.state)&&!G.resultsShown){
@@ -2586,8 +2716,6 @@ window.OnlineClient=(function(){
  }
  function setup(){
   $('hud').insertAdjacentHTML('beforeend','<div id="onlineConnection" aria-live="polite"></div>');
-  const practice=document.createElement('button');practice.id='practiceBots';practice.className='menuAction secondary';practice.textContent=T('Rivales IA');$('searchCancel').before(practice);
-  practice.onclick=()=>{if(NET.on)raw({type:'leave'});const socket=NET.ws;NET.ws=null;NET.on=false;NET.protocol=undefined;NET.room=null;NET.queue=false;NET.pending=[];clearTimeout(retryTimer);clearInterval(heartbeat);socket?.close();$('searchCount').textContent='1/9';fillWithBots();};
   $('copyCode').onclick=()=>shareRoom();$('copyCode').title=tr('Invite friends');
   $('copyCode').setAttribute('aria-label',tr('Invite friends'));
   $('searchCancel').addEventListener('click',()=>{NET.pending=NET.pending.filter(p=>p.type!=='joinpub');NET.queue=false;});
@@ -2598,7 +2726,7 @@ window.OnlineClient=(function(){
   setInterval(tick,200);
  }
  function rememberReceipt(receipt){if(NET.protocol!==2||!G.netBattle||!NET.matchId)return;const pending=LS.get(pendingKey(),null);if(pending?.matchId===NET.matchId){pending.receipt=receipt;LS.set(pendingKey(),pending);}}
- return {endpoint,open,send,handle,closed,pickup,attack,searchCopy,setup,tick,readInvite,shareRoom,now,rememberReceipt};
+ return {endpoint,open,send,handle,closed,pickup,attack,searchCopy,detachSearch,setup,tick,readInvite,shareRoom,now,rememberReceipt};
 })();
 
 </script>
@@ -3058,7 +3186,7 @@ function netSend(o){
  if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(o));
  else if(NET.pending.length<16)NET.pending.push(o);
 }
-let searching=false,searchTimer=null,searchT=0,searchFail=false,fillIv=null,botStartTimer=null,searchCancelled=false;
+let searching=false,searchTimer=null,searchT=0,searchStartedAt=0,searchFail=false,fillIv=null,botStartTimer=null,searchCancelled=false;
 let netRetry=0,netRetryT=null;
 function ensureNet(){if(RACE_OFFLINE)return;
  const url=defWs(),name=getName()||ensureName();
@@ -3119,26 +3247,23 @@ function launchAttack(kind,from){
 }
 function openSearch(){
  $('menuOv').classList.add('hidden');$('searchOv').classList.remove('hidden');
- searching=true;searchCancelled=false;searchT=0;searchFail=false;clearTimeout(botStartTimer);MenuUI.searchState(false);
+ searching=true;searchCancelled=false;searchT=0;searchStartedAt=performance.now();searchFail=false;clearTimeout(botStartTimer);MenuUI.searchState(false);
  $('searchCount').textContent=(NET.on?Math.max(1,NET.players.length):1)+'/9';
  const priv=NET.room&&NET.room!=='PUB';
  MenuUI.searchState(false);
  ensureNet();if(!NET.room)netSend({type:'joinpub',name:getName()||ensureName()});
  clearInterval(searchTimer);
- searchTimer=setInterval(()=>{if(!searching)return;searchT+=0.2;
+ searchTimer=setInterval(()=>{if(!searching)return;searchT=(performance.now()-searchStartedAt)/1000;
   const found=NET.on?Math.max(1,NET.players.length):1;
   $('searchCount').textContent=found+'/9';MenuUI.searchState(false);
-  if(RACE_OFFLINE&&!NET.on&&searchT>=1&&!priv){clearInterval(searchTimer);
+  if(searchT>=15&&(!NET.on||!NET.room)&&!priv){clearInterval(searchTimer);
    fillWithBots();}},200);
 }
 function closeSearch(){searching=false;clearInterval(searchTimer);clearInterval(fillIv);clearTimeout(botStartTimer);NET.pending=NET.pending.filter(p=>p.type!=='joinpub');$('searchOv').classList.add('hidden');}
 function fillWithBots(){
- if(!searching)return;clearInterval(searchTimer);MenuUI.searchState(true);
- const seed=(Date.now()%1e9)|0;SR=mulberry32(seed);G.bots=makeBots(9,seed,NET.on);G.matchT=MATCH_T;G.netBattle=false;
- let n=Math.max(1,parseInt($('searchCount').textContent)||1);
- clearInterval(fillIv);
- fillIv=setInterval(()=>{if(!searching){clearInterval(fillIv);return;}n=Math.min(9,n+1);$('searchCount').textContent=n+'/9';MenuUI.searchState(true);
-  if(n>=9){clearInterval(fillIv);botStartTimer=setTimeout(()=>{if(!searching)return;closeSearch();start(true);},350);}},120);
+ if(!searching)return;clearInterval(searchTimer);clearInterval(fillIv);clearTimeout(botStartTimer);OnlineClient.detachSearch();
+ G.matchT=MATCH_T;G.netBattle=false;$('searchCount').textContent='9/9';MenuUI.searchState(true);
+ botStartTimer=setTimeout(()=>{if(!searching||searchCancelled)return;closeSearch();start(true);},350);
 }
 
 const BOT_NAMES=BotBrain.names;
@@ -3555,8 +3680,12 @@ function ensureName(){let raw=LS.get('tcName',null),n=sanitizeNameLocal(raw);if(
 function buyJuice(el,icon,name){sfx.pow();sfx.coin();showToast(T('¡COMPRADO! ')+icon+' '+T(name),'#b6f04a');coinBurst(el);}
 function fillMenuLoadout(){
  const draw=(el,item)=>{const cv=el.querySelector('canvas');const g=cv.getContext('2d');g.clearRect(0,0,cv.width,cv.height);
-  if(item){drawAccIcon(cv,item);el.classList.add('on');el.title=T(item.n);}
-  else{g.fillStyle='#3a4450';g.font='18px serif';g.textAlign='center';g.textBaseline='middle';g.fillText('—',cv.width/2,cv.height/2);el.classList.remove('on');el.title=T('Vacío');}};
+  if(item){drawAccIcon(cv,item);el.classList.add('on');}
+  else{el.classList.remove('on');}
+  const category=T({habil:'HABILIDAD',llantas:'LLANTA',gadgets:'GADGET'}[el.dataset.shop]);
+  el.querySelector('.lsLb').textContent=category;
+  el.title=T('Garaje')+' · '+category+' · '+T(item?item.n:'Vacío');
+  el.setAttribute('aria-label',el.title);el.setAttribute('aria-haspopup','dialog');};
  draw($('lsLlanta'),ACC.find(x=>x.id===eqAcc.llanta));
  draw($('lsGadget'),ACC.find(x=>x.id===eqAcc.gadget));
  draw($('lsHabil'),ABIL.find(x=>x.id===eqAbil));
@@ -3636,7 +3765,7 @@ function animatePass(oldXP,newXP,fillEl,tierEl,flashEl,markEl,nextEl,done){
 function showX9(rank,pos,cp,oldXP,newXP,online){
  $('pauseOv').classList.add('hidden');
  setState('over');sfx.mile();RunProgress.summary('battleSummary');
- $('resTitle').textContent=T('RESULTADOS')+' VS9';$('resMode').textContent=online?T('ONLINE'):T('IA');
+ $('resTitle').textContent=T('RESULTADOS')+' VS9';$('resMode').textContent=T(modeName(G.mode));
  $('resMode').style.display='inline-block';
  $('resBoard').innerHTML=rank.map((r,i)=>'<div class="rankRow'+(r.you?' you':'')+'"><span><b>'+(i+1)+'</b> '+esc(r.name)+(r.you?' · '+(lang==='en'?'you':T('tú')):'')+'</span><span>'+Math.floor(r.meters).toLocaleString(lang)+' m</span></div>').join('');
  $('resCP').textContent=(cp>=0?'+':'')+cp+' CP · '+(lang==='en'?T('Position '):T('Puesto '))+pos;
@@ -3679,7 +3808,7 @@ $('muteBtn').onclick=()=>{initAudio();toggleMute();};
 $('musBtn').onclick=()=>{initAudio();toggleMusic();};
 $('garBtn').onclick=()=>{uiClick();garSeen=affordCount();LS.set('tcGarSeen',garSeen);garViewed={};renderGarage();$('garOv').classList.remove('hidden');renderMenuSafe();};
 $('garBack').onclick=()=>{uiClick();$('garOv').classList.add('hidden');renderMenuSafe();};
-$('changeCar').onclick=()=>{uiClick();renderGarage();$('garOv').classList.remove('hidden');};
+$('changeCar').onclick=()=>{uiClick();renderGarage();setGarTab('cars');$('garOv').classList.remove('hidden');};
 $('resetBtn').onclick=()=>{if(confirm(T('¿Borrar récords y fantasma de 1 jugador?'))){
  RunProgress.resetSolo();LS.set('tcBestMeters',0);LS.set('tcGhost',null);for(const key of ['tcRank','tcRankSub','tcRankSup','tcRankWorldV2','tcRankSubWorldV2','tcRankSupWorldV2'])LS.set(key,[]);LS.set('tcBest',0);G.best=0;sendStats();
  showToast(T('↺ Récords reiniciados'),'#ff5e3a');renderMenuSafe();}};

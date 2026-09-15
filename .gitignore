@@ -4,3 +4,8 @@ rank.json
 *.log
 *.pid
 .env
+data/
+online-v2.json
+*.tmp
+.env.*
+!.env.example

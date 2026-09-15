@@ -53,6 +53,32 @@ test('nine real humans start one clock and tenth waits; modes have distinct queu
  assert.notEqual(all[9].joined.code,all[0].joined.code);assert.equal(app.rooms.get(all[0].joined.code).players.length,9);
  const other=await guest(url);other.send({type:'joinpub',mode:'subita'});assert.notEqual((await other.read('joined')).code,all[9].joined.code);
 });
+
+test('queue deadline fills only missing seats, shares the race and persists only human profiles',async t=>{
+ const {url,app,dir}=await boot(t,{queueWaitMs:180,durationMs:650}),a=await guest(url,'Jesús'),b=await guest(url,'하늘');
+ a.send({type:'joinpub',mode:'normal'});const {code}=await a.read('joined');
+ b.send({type:'joinpub',mode:'normal'});assert.equal((await b.read('joined')).code,code);
+ await pause(60);assert.equal(app.rooms.get(code).racing,false);assert.equal(app.rooms.get(code).players.length,2);
+ const m=await a.read('start');assert.deepEqual(await b.read('start'),m);
+ const room=await a.read('room',m=>m.racing);assert.equal(room.p.length,9);
+ assert(room.p.some(p=>p.id===a.welcome.id));assert(room.p.some(p=>p.id===b.welcome.id));
+ const bots=app.rooms.get(code).players.filter(p=>p.isBot);assert.equal(bots.length,7);assert.equal(new Set(bots.map(p=>p.name)).size,7);
+ await pause(100);assert(bots.every(p=>p.d>0&&Number.isFinite(p.d)));
+ a.send({type:'pickup',kind:'rayo',matchId:m.matchId,seq:1});await a.read('inventory');
+ a.send({type:'atk',kind:'rayo',matchId:m.matchId,seq:2});await a.read('inventory');await b.read('atk');assert(bots.every(p=>p.attackSlowT>0));
+ const end=await a.read('end');assert.equal(end.rank.length,9);assert.deepEqual((await b.read('end')).rank,end.rank);
+ a.send({type:'getrank'});const rank=(await a.read('rank')).rank;assert.equal(rank.length,2);assert(rank.every(p=>p.races===1));
+ const stored=JSON.parse(fs.readFileSync(path.join(dir,'v2.json'),'utf8'));assert.equal(Object.keys(stored.profiles).length,2);
+ await pause(210);assert.equal(app.rooms.get(code).racing,false,'finished queues must not start another race');
+ a.send({type:'joinpub'});assert.notEqual((await a.read('joined')).code,code,'replay uses a fresh queue');
+});
+
+test('cancelled queues and manual rooms never auto-fill',async t=>{
+ const {url,app}=await boot(t,{queueWaitMs:100});const a=await guest(url);a.send({type:'joinpub'});const {code}=await a.read('joined');a.send({type:'leave'});await a.read('left');
+ const {code:manual}=await pair(url);await pause(220);
+ assert.equal(app.rooms.has(code),false);assert.equal(a.inbox.some(m=>m.type==='start'),false);
+ assert.equal(app.rooms.get(manual).racing,false);assert.equal(app.rooms.get(manual).players.length,2);
+});
 test('manual room host controls, listing, cancellation, and late joins',async t=>{
  const {url}=await boot(t),{a,b,code}=await pair(url),c=await guest(url);
  c.send({type:'list'});assert.equal((await c.read('rooms')).rooms.length,0);

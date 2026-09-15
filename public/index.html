@@ -2672,6 +2672,7 @@ const dark=document.createElement('canvas'),dctx=dark.getContext('2d');
 let W=0,H=0,DPR=1,roadW=0,roadL=0;
 const _laneGradCache=new Map();
 function layout(){
+  const previous={w:W,h:H,roadW,roadL};
   const d=Math.min(devicePixelRatio||1,1.5);
   const w=cvs.clientWidth||innerWidth,h=cvs.clientHeight||innerHeight;
   if(d!==DPR||w!==W||h!==H){DPR=d;W=w;H=h;
@@ -2680,6 +2681,30 @@ function layout(){
     const DS=.5;dark.width=Math.max(2,Math.floor(W*DPR*DS));dark.height=Math.max(2,Math.floor(H*DPR*DS));
     dctx.setTransform(DPR*DS,0,0,DPR*DS,0,0);}
   roadW=Math.max(240,Math.min(W*0.8,H*0.6,560));roadL=(W-roadW)/2;
+  if(previous.w>0&&previous.h>0&&previous.roadW>0&&(previous.w!==W||previous.h!==H)){
+    // Resizing changes screen coordinates, never the canonical race distance.
+    const sy=H/previous.h,sx=roadW/previous.roadW;
+    const roadX=x=>roadL+(x-previous.roadL)*sx;
+    const move=o=>{if(Number.isFinite(o.x))o.x=roadX(o.x);if(Number.isFinite(o.y))o.y*=sy;
+      if(Number.isFinite(o.previousX))o.previousX=roadX(o.previousX);if(Number.isFinite(o.previousY))o.previousY*=sy;
+      for(const key of ['vy','own'])if(Number.isFinite(o[key]))o[key]*=sy;};
+    const gap=(delta,scale,clearance)=>Math.abs(delta)>clearance?Math.sign(delta)*(clearance+(Math.abs(delta)-clearance)*scale):delta;
+    const moveHazard=(o,driverX,driverY)=>{const x=o.x,y=o.y;move(o);
+      // Hitboxes keep their pixel size. Scale the free space beyond them so a
+      // safe near pass cannot become a crash just because the screen shrank.
+      if(Number.isFinite(o.w)&&Number.isFinite(o.h)){
+        o.x=roadX(driverX)+gap(x-driverX,sx,(CAR_W-6+o.w)/2);
+        o.y=driverY*sy+gap(y-driverY,sy,(CAR_H-8+o.h)/2);
+      }};
+    for(const o of G.obs||[])moveHazard(o,G.px,G.py);
+    G.px=roadX(G.px);G.py*=sy;G.vy*=sy;
+    for(const key of ['speed','spawnAcc','nextGap','powAcc','nextPow','sideAcc','lampAcc'])if(Number.isFinite(G[key]))G[key]*=sy;
+    for(const key of ['coinsA','pows','parts','floats','specBooms'])for(const o of G[key]||[])move(o);
+    for(const o of G.side||[]){o.x*=W/previous.w;o.y*=sy;}for(const o of G.lamps||[])o.y*=sy;
+    for(const b of G.bots||[]){for(const o of b.obs||[])moveHazard(o,b.x,previous.h*.74);
+      b.x=roadX(b.x);for(const key of ['speed','spawnAcc','nextGap'])if(Number.isFinite(b[key]))b[key]*=sy;
+      for(const o of b.pickups||[])move(o);}
+  }
 }
 addEventListener('resize',layout);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,rnd=(a,b)=>a+Math.random()*(b-a);

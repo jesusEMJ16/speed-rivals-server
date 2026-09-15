@@ -2,6 +2,8 @@
 const fs=require('node:fs/promises'), path=require('node:path'), http=require('node:http'), crypto=require('node:crypto');
 const {WebSocketServer}=require('ws');
 const MAX=9,LANES=3,DUR=120000,COUNTDOWN=2450;
+// Public Google Play app-signing certificate supplied by the app owner.
+const ANDROID_RELEASE_CERT_SHA256='13:04:44:D7:36:92:7D:A8:65:2E:AC:4F:28:E5:E3:7B:76:09:3B:93:61:D7:96:8B:AD:16:1A:73:78:21:19:38';
 const MODES=['normal','subita','supervivencia'];
 const ATTACKS=['oil','cones','rayo','emp','gancho','prisa'];
 const PUBLIC_FILES=['index.html','privacy.html','chakrapetch-OFL.txt','racingsansone-OFL.txt','noto-latin-OFL.txt','noto-korean-OFL.txt','noto-japanese-OFL.txt','noto-devanagari-OFL.txt','noto-chinese-OFL.txt','noto-bengali-OFL.txt','noto-arabic-OFL.txt'];
@@ -126,7 +128,7 @@ function createServer(options={}){
  const httpServer=http.createServer((req,res)=>{const route=(req.url||'').split('?')[0];
   if(route==='/.well-known/assetlinks.json'){
    if(req.method!=='GET'){res.writeHead(405,{'allow':'GET'});return res.end();}
-   const fingerprints=String(options.androidCertSha256??process.env.SR_ANDROID_CERT_SHA256??'').split(',').map(s=>s.trim().toUpperCase());
+   const fingerprints=String(options.androidCertSha256??process.env.SR_ANDROID_CERT_SHA256??ANDROID_RELEASE_CERT_SHA256).split(',').map(s=>s.trim().toUpperCase());
    const valid=fingerprints.length>0&&fingerprints.every(s=>/^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s));
    res.writeHead(valid?200:503,{'content-type':'application/json; charset=utf-8','cache-control':valid?'public, max-age=300':'no-store','x-content-type-options':'nosniff'});
    return res.end(JSON.stringify(valid?[{relation:['delegate_permission/common.handle_all_urls'],target:{namespace:'android_app',package_name:'solutions.moncadastudio.speedrivals',sha256_cert_fingerprints:[...new Set(fingerprints)]}}]:[]));

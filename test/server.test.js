@@ -31,6 +31,13 @@ test('Android association exposes only configured valid release fingerprints',as
   assert.equal((await fetch(endpoint,{method:'POST'})).status,405);
  }
 });
+
+test('Android association defaults to the release certificate supplied by the owner',async t=>{
+ const {url}=await boot(t);const res=await fetch(url.replace('ws:','http:')+'/.well-known/assetlinks.json');
+ assert.equal(res.status,200);const [association]=await res.json();
+ assert.equal(association.target.package_name,'solutions.moncadastudio.speedrivals');
+ assert.deepEqual(association.target.sha256_cert_fingerprints,['13:04:44:D7:36:92:7D:A8:65:2E:AC:4F:28:E5:E3:7B:76:09:3B:93:61:D7:96:8B:AD:16:1A:73:78:21:19:38']);
+});
 test('Unicode names survive and no v1 ranking writes are permitted',async t=>{
  assert.equal(cleanName('  Jesús 東京  '),'Jesús 東京');
  const {url}=await boot(t),s=await socket(url);s.send({type:'stats',cp:999999});assert.equal((await s.read('err')).code,'AUTH_REQUIRED');

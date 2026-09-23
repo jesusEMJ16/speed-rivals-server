@@ -2,7 +2,7 @@
 const test=require('node:test'), assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const WebSocket=require('ws');
-const {createServer,cleanName}=require('../server');
+const {createServer,cleanName,pruneMatches}=require('../server');
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function boot(t,opts={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sr-v2-'));
@@ -40,7 +40,7 @@ test('Android association defaults to the release certificate supplied by the ow
 });
 test('Unicode names survive and no v1 ranking writes are permitted',async t=>{
  assert.equal(cleanName('  Jesús 東京  '),'Jesús 東京');
- const {url}=await boot(t),s=await socket(url);s.send({type:'stats',cp:999999});assert.equal((await s.read('err')).code,'AUTH_REQUIRED');
+ const {url}=await boot(t),s=await socket(url);s.send({type:'stats',cp:999999});assert.equal((await s.read('err')).code,'UPDATE_REQUIRED');
  s.send({type:'hello',protocol:1});assert.equal((await s.read('err')).code,'INVALID_VERSION');
  s.send({type:'hello',protocol:2,name:'東京'});const w=await s.read('welcome');assert.equal(w.profile.name,'東京');
  s.send({type:'stats',name:'Renée',cp:99999,bestVs:999999});await s.read('profiles');s.send({type:'score',km:999});assert.equal((await s.read('err')).code,'INVALID_STATE');
@@ -181,4 +181,38 @@ test('expired disconnected entrant can rejoin the same manual room after its res
  const {url,app}=await boot(t,{disconnectGraceMs:35}),{a,b,code}=await pair(url),m=await start(a,b);
  a.ws.terminate();await pause(70);b.send({type:'st',matchId:m.matchId,seq:1,d:1,lane:1,alive:false});await b.read('end');assert.equal(app.rooms.get(code).players.length,1);
  const again=await guest(url,'阿娜',a.welcome.token);await again.read('end');again.send({type:'joinroom',code});await again.read('joined');const room=await again.read('room');assert.equal(room.p.length,2);assert.ok(room.p.some(p=>p.id===a.welcome.id));
+});
+
+test('Protocol-1 clients get one update notice and are closed on matchmaking, without any write',async t=>{
+ const {url,app}=await boot(t),s=await socket(url);const closed=new Promise(r=>s.ws.once('close',code=>r(code)));
+ s.send({type:'getrank'});s.send({type:'getstats'});s.send({type:'stats',name:'Viejo',cp:500});
+ const e=await s.read('err');assert.equal(e.code,'UPDATE_REQUIRED');assert.match(e.msg,/Actualiza/);
+ s.send({type:'joinpub',name:'Viejo'});assert.equal(await closed,4426);
+ assert.equal(s.inbox.filter(m=>m.type==='err').length,0,'only one notice per socket');
+ const g=await guest(url,'Nuevo');g.send({type:'getrank'});const r=await g.read('rank');assert.equal(r.rank.some(p=>p.name==='Viejo'),false);assert.equal(app.rooms.size,0);
+});
+test('Storage that fails at boot keeps retrying and becomes ready without a restart',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sr-v2-'));let fails=3,value=null;
+ const storage={async load(){if(fails-->0)throw Error('fetch failed');return value;},async save(v){value=structuredClone(v);}};
+ const app=createServer({port:0,host:'127.0.0.1',storage,storageRetryMs:20,storageRetryMaxMs:40,tickMs:10});app.ready.catch(()=>{});
+ t.after(async()=>{await app.close();fs.rmSync(dir,{recursive:true,force:true});});
+ await new Promise(r=>app.httpServer.listening?r():app.httpServer.once('listening',r));
+ const health=async()=>(await fetch('http://127.0.0.1:'+app.address().port+'/health')).json();
+ let h=await health();for(let i=0;i<100&&!h.ready;i++){await pause(20);h=await health();}
+ assert.equal(h.ready,true);assert.equal(h.storage.state,'ready');
+ const g=await guest('ws://127.0.0.1:'+app.address().port,'Recuperado');assert.equal(g.welcome.profile.name,'Recuperado');
+});
+test('Health reports a sanitized storage code and never the raw error',async t=>{
+ const storage={async load(){throw Error('connect ECONNREFUSED rediss://default:SECRET@example.upstash.io')},async save(){}};
+ const app=createServer({port:0,host:'127.0.0.1',storage,storageRetryMs:5000,tickMs:10});app.ready.catch(()=>{});
+ t.after(()=>app.close());
+ await new Promise(r=>app.httpServer.listening?r():app.httpServer.once('listening',r));
+ let body='';for(let i=0;i<50;i++){body=await (await fetch('http://127.0.0.1:'+app.address().port+'/health')).text();if(JSON.parse(body).storage.code)break;await pause(10);}
+ const h=JSON.parse(body);assert.equal(h.ready,false);assert.equal(h.storage.code,'NETWORK');assert.equal(body.includes('SECRET'),false);
+});
+test('Old match receipts are pruned but receipts still referenced by a profile survive',()=>{
+ const d={version:2,profiles:{a:{id:'a',lastMatchId:'m0'}},tokens:{},matches:{},updatedAt:0};
+ for(let i=0;i<400;i++)d.matches['m'+i]={serverTime:i};
+ pruneMatches(d);const ids=Object.keys(d.matches);
+ assert.equal(ids.length,301);assert.ok(d.matches.m0,'referenced receipt kept');assert.ok(d.matches.m399);assert.equal(d.matches.m50,undefined);
 });

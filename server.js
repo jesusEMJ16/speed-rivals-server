@@ -7,6 +7,10 @@ const MAX=9,LANES=3,DUR=120000,COUNTDOWN=2450;
 const ANDROID_RELEASE_CERT_SHA256='13:04:44:D7:36:92:7D:A8:65:2E:AC:4F:28:E5:E3:7B:76:09:3B:93:61:D7:96:8B:AD:16:1A:73:78:21:19:38';
 const MODES=['normal','subita','supervivencia'];
 const ATTACKS=['oil','cones','rayo','emp','gancho','prisa'];
+// Protocol-1 clients (published before v2) never send hello. Tell them once to update, and close on matchmaking so their own offline fallback runs instead of waiting forever.
+const LEGACY_TYPES=new Set(['getrank','getstats','stats','score','list','joinpub','create','joinroom','leave','loadout','setmode','setpriv','startRace','st','atk']);
+const LEGACY_MATCH=new Set(['joinpub','create','joinroom']);
+const LEGACY_MSG='Actualiza Speed Rivals para jugar online · Update the game to play online';
 const PUBLIC_FILES=['index.html','privacy.html','chakrapetch-OFL.txt','racingsansone-OFL.txt','noto-latin-OFL.txt','noto-korean-OFL.txt','noto-japanese-OFL.txt','noto-devanagari-OFL.txt','noto-chinese-OFL.txt','noto-bengali-OFL.txt','noto-arabic-OFL.txt'];
 const RANK_CP=[40,25,15,8,0,-8,-15,-22,-30];
 const COLS=['#3aa0ff','#ffd23f','#8be04a','#ff7ab6','#c9d4de','#ff9040','#e05ec0','#7ae0d0','#ffa07a'];
@@ -16,6 +20,9 @@ function sanitizeName(v){return cleanName(v)||'Player';}
 function sanitizeRoom(v){return cleanName(v)||'SALA';}
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const empty=()=>({version:2,profiles:{},tokens:{},matches:{},updatedAt:0});
+// Keep every match still referenced as a profile's lastMatchId (replayed on reconnect) plus the newest MATCH_KEEP; the whole document is one storage value, so it must not grow forever.
+const MATCH_KEEP=300;
+function pruneMatches(d){const ids=Object.keys(d.matches);if(ids.length<=MATCH_KEEP)return;const keep=new Set(Object.values(d.profiles).map(p=>p.lastMatchId).filter(Boolean));for(const id of ids.sort((x,y)=>(d.matches[y].serverTime||0)-(d.matches[x].serverTime||0)).slice(0,MATCH_KEEP))keep.add(id);for(const id of ids)if(!keep.has(id))delete d.matches[id];}
 function validData(v){
  if(!v||v.version!==2||!v.profiles||!v.tokens||!v.matches||Array.isArray(v.profiles))throw Error('Invalid v2 storage');
  for(const [id,p] of Object.entries(v.profiles))if(p.id!==id||!Number.isFinite(p.cp)||p.cp<0||!Number.isFinite(p.races))throw Error('Invalid profile');
@@ -36,8 +43,34 @@ function storageFor(o){
  if((o.production??process.env.NODE_ENV==='production')&&!file)throw Error('Production requires Upstash or SR_DATA_FILE on persistent disk');
  return fileStorage(path.resolve(file||'data/online-v2.json'));
 }
+// Sanitized failure category: raw messages can contain secrets (a pasted rediss://user:PASSWORD@ URL)
+// or the whole state document (UpstashError appends "command was: <body>"), so only codes are exposed.
+function storageCode(e){const m=String(e&&e.message||e);
+ if(/Production requires Upstash/.test(m))return 'CONFIG_MISSING';
+ if(/Legacy storage keys/.test(m))return 'CONFIG_LEGACY_KEY';
+ if(e&&e.name==='UrlError')return 'CONFIG_BAD_URL';
+ if(/Cannot find module/.test(m))return 'DEPENDENCY_MISSING';
+ if(/fetch is not defined/.test(m))return 'RUNTIME_NO_FETCH';
+ if(/WRONGPASS|Unauthorized/i.test(m))return 'AUTH_REJECTED';
+ if(/NOPERM/.test(m))return 'PERMISSION_DENIED';
+ if(/limit exceeded/i.test(m))return 'QUOTA_EXCEEDED';
+ if(/^Invalid (v2 storage|profile)$/.test(m))return 'INVALID_DATA';
+ if(/fetch failed|ENOTFOUND|EAI_AGAIN|ECONN|ETIMEDOUT|socket/i.test(m))return 'NETWORK';
+ if(/Service Unavailable|Internal Server Error|Bad Gateway|Gateway Timeout/i.test(m))return 'UPSTREAM_5XX';
+ if(/EACCES|EPERM|EROFS|ENOSPC|EEXIST|ENOTDIR/.test(m))return 'FILE_IO';
+ return 'UNKNOWN';}
 function createServer(options={}){
  const rooms=new Map(),sessions=new Map();let data=empty(),storage,storageReady=false,storageError=null,closing=false,closePromise,queue=Promise.resolve();
+ let loaded=false,recoverTimer=null,failures=0,storageStatus={state:'starting',code:null,phase:null,failures:0,since:Date.now(),nextRetryAt:null};
+ const retryBase=options.storageRetryMs??1000,retryMax=options.storageRetryMaxMs??60000;
+ function storageFailed(phase,e){storageReady=false;storageError=e;failures++;const code=storageCode(e),delay=retryBase>0?Math.min(retryMax,retryBase*2**Math.min(failures-1,16)):null;
+  if(storageStatus.code!==code||storageStatus.phase!==phase)console.error('Storage '+phase+' failed ['+code+'] attempt '+failures+(delay?'; retrying in '+delay+' ms':''));
+  storageStatus={state:'unavailable',code,phase,failures,since:storageStatus.code===code?storageStatus.since:Date.now(),nextRetryAt:delay?Date.now()+delay:null};
+  clearTimeout(recoverTimer);if(delay&&!closing){recoverTimer=setTimeout(()=>enqueue(recover).catch(()=>{}),delay);recoverTimer.unref?.();}}
+ function storageOk(){if(!storageReady&&failures)console.log('Storage ready after '+failures+' failed attempt(s)');storageReady=true;storageError=null;failures=0;clearTimeout(recoverTimer);storageStatus={state:'ready',code:null,phase:null,failures:0,since:Date.now(),nextRetryAt:null};}
+ // Before the first successful load: redo config+load+validate+write. Afterwards: re-persist the last committed in-memory state.
+ async function recover(){if(closing||storageReady)return;if(!loaded)return init().catch(()=>{});try{await storage.save(data);storageOk();}catch(e){storageFailed('write',e);}}
+ async function init(){let phase='config';try{storage=storage||storageFor(options);phase='load';const v=await storage.load();phase='validate';const next=v===null?empty():validData(v);phase='write';await storage.save(next);data=next;loaded=true;storageOk();}catch(e){if(phase==='config')storage=undefined;storageFailed(phase,e);throw e;}}
  const now=()=>Date.now(), countdown=options.countdownMs??COUNTDOWN,duration=options.durationMs??DUR,grace=options.disconnectGraceMs??15000;
  const maxSpeed=options.maxDistancePerSecond??5000,burst=options.distanceBurst??240,queueWait=options.queueWaitMs??15000;
  const pickupCooldown=options.pickupCooldownMs??3500,attackCooldown=options.attackCooldownMs??750;
@@ -47,7 +80,7 @@ function createServer(options={}){
  function publicProfile(p){return {id:p.id,name:p.name,cp:p.cp,bestVs:p.bestVs,wins:p.wins,races:p.races};}
  function profiles(){return Object.values(data.profiles).map(publicProfile).sort((a,b)=>b.cp-a.cp||b.bestVs-a.bestVs||a.id.localeCompare(b.id));}
  function stats(ws,type='profiles'){const rows=profiles();send(ws,{type,...(type==='rank'?{rank:rows}:{profiles:rows}),source:'online',season:'v2',updatedAt:data.updatedAt});}
- async function commit(next){try{await storage.save(next);data=next;storageReady=true;storageError=null;}catch(e){storageReady=false;storageError=e;throw e;}}
+ async function commit(next){try{await storage.save(next);data=next;storageOk();}catch(e){storageFailed('write',e);throw e;}}
  function needsStorage(ws){if(!storageReady){err(ws,'STORAGE_UNAVAILABLE');return false;}return true;}
  function roomPayload(R,p){return {type:'room',id:p.id,code:R.code,queue:!R.manual,racing:R.racing,mode:R.mode,host:R.host,manual:R.manual,priv:R.priv,roomName:R.name,matchId:R.matchId,seed:R.seed,startAt:R.startAt,endsAt:R.endsAt,serverTime:now(),spectating:!!p.spectating,p:R.players.map(q=>({id:q.id,name:data.profiles[q.id]?.name||q.name,col:q.col,d:q.d,lane:q.lane,alive:q.alive,connected:q.connected,cp:data.profiles[q.id]?.cp||0,car:q.loadout?.car??null,llanta:q.loadout?.llanta??null,gadget:q.loadout?.gadget??null,abil:q.loadout?.abil??null}))};}
  function broadcast(R){for(const p of R.players)if(p.R===R)send(p.ws,roomPayload(R,p));}
@@ -67,7 +100,7 @@ function createServer(options={}){
  }
  async function finishRace(R){if(!R.racing||R.finishing||now()<R.nextRetry)return;R.finishing=true;
   try{let end=data.matches[R.matchId];if(!end){const next=structuredClone(data);const rank=[...R.players].sort((a,b)=>b.d-a.d||a.id.localeCompare(b.id)).map((p,i)=>{if(p.isBot)return {id:p.id,name:p.name,d:p.d,cpDelta:0,cpTotal:0};const pr=next.profiles[p.id],before=pr.cp;pr.cp=Math.max(0,Math.min(1e9,pr.cp+RANK_CP[i]));pr.races++;if(i===0)pr.wins++;pr.bestVs=Math.max(pr.bestVs,p.d*.03);pr.lastMatchId=R.matchId;return {id:p.id,name:pr.name,d:p.d,cpDelta:pr.cp-before,cpTotal:pr.cp};});
-    end={type:'end',matchId:R.matchId,rank,roomRank:rank.map(p=>({id:p.id,name:p.name,cp:p.cpTotal})),serverTime:now(),saved:true};next.matches[R.matchId]=end;next.updatedAt=now();await commit(next);}
+    end={type:'end',matchId:R.matchId,rank,roomRank:rank.map(p=>({id:p.id,name:p.name,cp:p.cpTotal})),serverTime:now(),saved:true};next.matches[R.matchId]=end;pruneMatches(next);next.updatedAt=now();await commit(next);}
    R.racing=false;R.lastEnd=end;for(const p of R.players){send(p.ws,end);p.activeMatch=null;p.item=null;p.spectating=false;}
    R.players=R.players.filter(p=>{if(p.isBot||p.R!==R)return false;if(p.connected||now()-p.disconnectedAt<grace)return true;p.R=null;return false;});host(R);broadcast(R);if(!R.players.length)rooms.delete(R.code);
   }catch(e){R.nextRetry=now()+500;for(const p of R.players)err(p.ws,'STORAGE_UNAVAILABLE','Result pending durable storage; retrying');}finally{R.finishing=false;}
@@ -86,7 +119,12 @@ function createServer(options={}){
   ws.player=p;send(ws,{type:'welcome',protocol:2,id,token,profile:publicProfile(data.profiles[id]),serverTime:now()});if(p.R){host(p.R);broadcast(p.R);if(!p.R.manual&&!p.R.racing&&!p.R.lastEnd&&p.R.players.length===MAX&&p.R.players.every(q=>q.connected))startRace(p.R);}if(!p.R?.racing&&data.profiles[id].lastMatchId){const last=data.matches[data.profiles[id].lastMatchId];if(last)send(ws,last);}
  }
  async function message(ws,m){if(!m||typeof m!=='object'||Array.isArray(m)||typeof m.type!=='string')return err(ws,'INVALID_STATE');
-  if(m.type==='ping')return send(ws,{type:'pong',sentAt:m.sentAt,serverTime:now()});if(m.type==='hello')return hello(ws,m);
+  if(m.type==='ping')return send(ws,{type:'pong',sentAt:m.sentAt,serverTime:now()});if(m.type==='hello'){ws.helloSeen=true;return hello(ws,m);}
+  if(!ws.player&&!ws.helloSeen&&LEGACY_TYPES.has(m.type)){
+   if(!ws.legacyNotified){ws.legacyNotified=true;err(ws,'UPDATE_REQUIRED',LEGACY_MSG);}
+   if(LEGACY_MATCH.has(m.type)&&!ws.legacyClosing){ws.legacyClosing=true;setTimeout(()=>ws.close(4426,'Update required'),200);}
+   return;
+  }
   const p=ws.player;if(!p)return err(ws,'AUTH_REQUIRED');if(p.ws!==ws)return err(ws,'AUTH_REQUIRED');
   if(m.type==='getstats')return stats(ws);if(m.type==='getrank')return stats(ws,'rank');
   if(m.type==='stats'){if(!needsStorage(ws))return;const name=cleanName(m.name);if(!name||name===data.profiles[p.id].name)return stats(ws);const next=structuredClone(data);next.profiles[p.id].name=name;next.updatedAt=now();await commit(next);if(p.R)broadcast(p.R);return stats(ws);}
@@ -149,7 +187,7 @@ function createServer(options={}){
     res.writeHead(200,{'content-type':publicName.endsWith('.html')?'text/html; charset=utf-8':'text/plain; charset=utf-8','x-content-type-options':'nosniff','cache-control':'no-cache'});res.end(content);
    }).catch(error=>{res.writeHead(error.code==='ENOENT'?404:500);res.end();});return;
   }
-  if(['/','/health','/ready'].includes(route)){res.writeHead(route==='/ready'&&!storageReady?503:200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:route==='/ready'?storageReady:true,ready:storageReady,protocol:2,season:'v2',profiles:Object.keys(data.profiles).length,rooms:rooms.size}));}
+  if(['/','/health','/ready'].includes(route)){res.writeHead(route==='/ready'&&!storageReady?503:200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({ok:route==='/ready'?storageReady:true,ready:storageReady,protocol:2,season:'v2',profiles:Object.keys(data.profiles).length,rooms:rooms.size,storage:storageStatus}));}
   const invite=/^\/invite\/([A-Za-z0-9]{6})$/.exec(route);if(invite){const code=invite[1].toUpperCase(),url=webPlayUrl(code);res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",'x-content-type-options':'nosniff','referrer-policy':'no-referrer'});return res.end('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Speed Rivals invitation</title><style>body{font:1.2rem system-ui;background:#101727;color:#fff;max-width:34rem;margin:12vh auto;padding:2rem}strong{display:block;font-size:3rem;letter-spacing:.2em}a{color:#65d6ff}</style><h1>Speed Rivals</h1><p>Join this room with its code:</p><strong>'+code+'</strong><p>Open Speed Rivals on web or Android, then enter the room code.</p>'+(url?'<p><a href="'+escape(url)+'">Play on web</a></p>':'')+'</html>');}
   res.writeHead(404);res.end();
  });
@@ -159,7 +197,7 @@ function createServer(options={}){
   ws.on('close',()=>enqueue(()=>{const p=ws.player;if(!p||p.ws!==ws)return;p.ws=null;p.connected=false;p.disconnectedAt=now();if(p.R){host(p.R);broadcast(p.R);}}));ws.on('error',()=>{});
  });
  const listening=new Promise((resolve,reject)=>{httpServer.once('error',reject);httpServer.listen(options.port??process.env.PORT??8787,options.host,resolve);});
- const initialized=enqueue(async()=>{try{storage=storageFor(options);const v=await storage.load();data=v===null?empty():validData(v);await commit(data);}catch(e){storageError=e;storageReady=false;throw e;}});
+ const initialized=enqueue(init); // first attempt decides `ready`; failures keep retrying in the background
  const ready=Promise.all([listening,initialized]).then(()=>undefined);ready.catch(()=>{});
  const tick=setInterval(()=>{if(closing)return;enqueue(async()=>{for(const R of rooms.values()){
    for(const p of [...R.players])if(!p.connected&&now()-p.disconnectedAt>=grace){if(R.racing){p.alive=false;p.item=null;}else detach(p);}
@@ -174,8 +212,8 @@ function createServer(options={}){
    if(R.racing){if(now()>=R.endsAt||(now()>=R.startAt&&R.players.every(p=>!p.alive)))await finishRace(R);else if(now()-(R.lastBroadcast||0)>=120){R.lastBroadcast=now();broadcast(R);}}
   }}).catch(()=>{});},options.tickMs??100);
  const heartbeat=setInterval(()=>{for(const ws of wss.clients){if(!ws.isAlive){ws.terminate();continue;}ws.isAlive=false;ws.ping();}},options.heartbeatMs??20000);
- function close(){if(closePromise)return closePromise;closing=true;clearInterval(tick);clearInterval(heartbeat);closePromise=(async()=>{await queue;for(const ws of wss.clients)ws.terminate();await new Promise(r=>wss.close(r));await new Promise(r=>httpServer.close(r));})();return closePromise;}
+ function close(){if(closePromise)return closePromise;closing=true;clearTimeout(recoverTimer);clearInterval(tick);clearInterval(heartbeat);closePromise=(async()=>{await queue;for(const ws of wss.clients)ws.terminate();await new Promise(r=>wss.close(r));await new Promise(r=>httpServer.close(r));})();return closePromise;}
  return {wss,rooms,httpServer,address:()=>httpServer.address(),ready,close};
 }
-if(require.main===module){const app=createServer();app.ready.then(()=>console.log('Speed Rivals v2 listening on '+app.address().port)).catch(e=>console.error('Readiness failed: '+e.message));for(const sig of ['SIGINT','SIGTERM'])process.once(sig,()=>app.close().then(()=>process.exit()));}
-module.exports={createServer,cleanName,badName,sanitizeName,sanitizeRoom,constants:{MAX,LANES,DUR,COUNTDOWN}};
+if(require.main===module){const app=createServer();app.ready.then(()=>console.log('Speed Rivals v2 listening on '+app.address().port)).catch(e=>console.error('Readiness failed ['+storageCode(e)+'] - retrying in background; see /health storage.code'));for(const sig of ['SIGINT','SIGTERM'])process.once(sig,()=>app.close().then(()=>process.exit()));}
+module.exports={createServer,pruneMatches,cleanName,badName,sanitizeName,sanitizeRoom,constants:{MAX,LANES,DUR,COUNTDOWN}};

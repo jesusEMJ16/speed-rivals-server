@@ -2544,11 +2544,12 @@ window.OnlineClient=(function(){
   clearTimeout(retryTimer);clearTimeout(handshake);NET.on=false;NET.protocol=0;NET.lastError=null;
   expectedMatch=LS.get(pendingKey(),null)?.matchId||expectedMatch;
   raw({type:'hello',protocol:2,token:LS.get(tokenKey(),null),name});status('Connecting…');
-  handshake=setTimeout(()=>{if(NET.ws===socket&&!NET.on){NET.lastError='INVALID_VERSION';status('Update required');socket.close();}},12000);
+  handshake=setTimeout(()=>{if(NET.ws===socket&&!NET.on){NET.lastError=NET.lastError||'TIMEOUT';status(NET.lastError==='INVALID_VERSION'?'Update required':'Could not connect.');socket.close();}},12000);
  }
+ const QUEUED=['joinpub','create','joinroom','getrank','getstats','list'];
  function send(packet){
   if(NET.protocol!==2)return false;
-  if(!NET.on||NET.ws?.readyState!==1)return true;
+  if(!NET.on||NET.ws?.readyState!==1)return !QUEUED.includes(packet.type);
   const p={...packet};
   if(['st','atk','pickup'].includes(p.type)){
    if(!NET.matchId||G.resultsShown||now()>=NET.endsAt)return true;
@@ -3182,7 +3183,7 @@ function defWs(){
 }
 function netSend(o){
  if(OnlineClient.send(o))return;
- if(NET.protocol===0){if(!['st','atk','score','stats','loadout','pickup'].includes(o.type)&&NET.pending.length<16)NET.pending.push(o);return;}
+ if(NET.protocol===0||!NET.on||!NET.ws||NET.ws.readyState!==1){if(!['st','atk','score','stats','loadout','pickup'].includes(o.type)){NET.pending=NET.pending.filter(p=>p.type!==o.type);if(NET.pending.length<16)NET.pending.push(o);}return;}
  if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(o));
  else if(NET.pending.length<16)NET.pending.push(o);
 }
@@ -3622,7 +3623,7 @@ function start(battle){
 function pause(){setState('paused');$('pauseOv').classList.remove('hidden');$('resumeBtn').focus();}
 function resume(){setState('playing');resumeAudio();$('pauseOv').classList.add('hidden');document.activeElement?.blur();}
 function toMenu(){GameFeel.reset();G.parts=[];G.floats=[];G.lasers=[];G.slowT=0;G.hitFx=0;G.flash=0;G.shake=0;setState('menu');MUS.bpm=138;
- sendStats();
+ try{ensureNet();}catch(e){}sendStats();
  ['overOv','pauseOv','resOv','searchOv','helpOv','missionsOv'].forEach(id=>$(id).classList.add('hidden'));
  $('slot').style.display='flex';
  $('pauseBtn').textContent='⏸';
@@ -3832,7 +3833,7 @@ function renderHelpContent(){
 }
 $('helpBtn').onclick=()=>{uiClick();renderHelpContent();$('helpOv').classList.remove('hidden');};
 $('helpBack').onclick=()=>{uiClick();$('helpOv').classList.add('hidden');};
-$('rankBtn').onclick=()=>{uiClick();if(NET.on){netSend({type:'getrank'});netSend({type:'getstats'});}renderRank();$('rankOv').classList.remove('hidden');};
+$('rankBtn').onclick=()=>{uiClick();try{ensureNet();}catch(e){}netSend({type:'getrank'});netSend({type:'getstats'});renderRank();$('rankOv').classList.remove('hidden');};
 $('rankBack').onclick=()=>{uiClick();$('rankOv').classList.add('hidden');};
 function setTab(t){rankTab=t;['rt1','rt9','rtSub','rtSup'].forEach(id=>$(id).classList.toggle('on',id===t));renderRank();}
 $('rt1').onclick=()=>setTab('rt1');$('rt9').onclick=()=>setTab('rt9');$('rtSub').onclick=()=>setTab('rtSub');$('rtSup').onclick=()=>setTab('rtSup');

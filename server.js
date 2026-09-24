@@ -10,6 +10,8 @@ const ATTACKS=['oil','cones','rayo','emp','gancho','prisa'];
 // Protocol-1 clients (published before v2) never send hello. Tell them once to update, and close on matchmaking so their own offline fallback runs instead of waiting forever.
 const LEGACY_TYPES=new Set(['getrank','getstats','stats','score','list','joinpub','create','joinroom','leave','loadout','setmode','setpriv','startRace','st','atk']);
 const LEGACY_MATCH=new Set(['joinpub','create','joinroom']);
+// Solo modes run on the client, so their records are self-reported: accept only plausible values.
+const SOLO_FIELDS={normal:'best1p',subita:'bestSub',supervivencia:'bestSup'},SOLO_MTR=0.03,SOLO_MAX_SECONDS=7200,SOLO_BURST_METERS=50,SOLO_PER_MINUTE=10;
 const LEGACY_MSG='Actualiza Speed Rivals para jugar online · Update the game to play online';
 const PUBLIC_FILES=['index.html','privacy.html','chakrapetch-OFL.txt','racingsansone-OFL.txt','noto-latin-OFL.txt','noto-korean-OFL.txt','noto-japanese-OFL.txt','noto-devanagari-OFL.txt','noto-chinese-OFL.txt','noto-bengali-OFL.txt','noto-arabic-OFL.txt'];
 const RANK_CP=[40,25,15,8,0,-8,-15,-22,-30];
@@ -72,12 +74,12 @@ function createServer(options={}){
  async function recover(){if(closing||storageReady)return;if(!loaded)return init().catch(()=>{});try{await storage.save(data);storageOk();}catch(e){storageFailed('write',e);}}
  async function init(){let phase='config';try{storage=storage||storageFor(options);phase='load';const v=await storage.load();phase='validate';const next=v===null?empty():validData(v);phase='write';await storage.save(next);data=next;loaded=true;storageOk();}catch(e){if(phase==='config')storage=undefined;storageFailed(phase,e);throw e;}}
  const now=()=>Date.now(), countdown=options.countdownMs??COUNTDOWN,duration=options.durationMs??DUR,grace=options.disconnectGraceMs??15000;
- const maxSpeed=options.maxDistancePerSecond??5000,burst=options.distanceBurst??240,queueWait=options.queueWaitMs??15000;
+ const maxSpeed=options.maxDistancePerSecond??5000,burst=options.distanceBurst??240,queueWait=options.queueWaitMs??10000;
  const pickupCooldown=options.pickupCooldownMs??3500,attackCooldown=options.attackCooldownMs??750;
  function enqueue(fn){const job=queue.then(fn);queue=job.catch(()=>{});return job;}
  function send(ws,m){if(ws?.readyState===1&&ws.bufferedAmount<262144)ws.send(JSON.stringify(m));}
  function err(ws,code,msg=code){send(ws,{type:'err',code,msg});}
- function publicProfile(p){return {id:p.id,name:p.name,cp:p.cp,bestVs:p.bestVs,wins:p.wins,races:p.races};}
+ function publicProfile(p){return {id:p.id,name:p.name,cp:p.cp,bestVs:p.bestVs,wins:p.wins,races:p.races,best1p:p.best1p||0,bestSub:p.bestSub||0,bestSup:p.bestSup||0};}
  function profiles(){return Object.values(data.profiles).map(publicProfile).sort((a,b)=>b.cp-a.cp||b.bestVs-a.bestVs||a.id.localeCompare(b.id));}
  function stats(ws,type='profiles'){const rows=profiles();send(ws,{type,...(type==='rank'?{rank:rows}:{profiles:rows}),source:'online',season:'v2',updatedAt:data.updatedAt});}
  async function commit(next){try{await storage.save(next);data=next;storageOk();}catch(e){storageFailed('write',e);throw e;}}
@@ -128,7 +130,11 @@ function createServer(options={}){
   const p=ws.player;if(!p)return err(ws,'AUTH_REQUIRED');if(p.ws!==ws)return err(ws,'AUTH_REQUIRED');
   if(m.type==='getstats')return stats(ws);if(m.type==='getrank')return stats(ws,'rank');
   if(m.type==='stats'){if(!needsStorage(ws))return;const name=cleanName(m.name);if(!name||name===data.profiles[p.id].name)return stats(ws);const next=structuredClone(data);next.profiles[p.id].name=name;next.updatedAt=now();await commit(next);if(p.R)broadcast(p.R);return stats(ws);}
-  if(m.type==='score')return err(ws,'INVALID_STATE','Only completed v2 races award online records');
+  if(m.type==='score'){if(!needsStorage(ws))return;const field=SOLO_FIELDS[m.mode],meters=Math.round(Number(m.km)*1000),secs=Number(m.time);
+   if(!field||!Number.isFinite(meters)||!Number.isFinite(secs)||meters<=0||secs<=0||secs>SOLO_MAX_SECONDS||meters>maxSpeed*SOLO_MTR*1.1*secs+SOLO_BURST_METERS)return err(ws,'INVALID_STATE','Implausible solo record');
+   const at=now();ws.scoreTimes=(ws.scoreTimes||[]).filter(x=>at-x<60000);if(ws.scoreTimes.length>=SOLO_PER_MINUTE)return err(ws,'RATE_LIMIT');ws.scoreTimes.push(at);
+   if(meters<=(data.profiles[p.id][field]||0))return stats(ws);
+   const next=structuredClone(data);next.profiles[p.id][field]=meters;next.updatedAt=now();await commit(next);return stats(ws);}
   if(m.type==='list')return send(ws,{type:'rooms',rooms:[...rooms.values()].filter(R=>R.manual&&!R.priv&&!R.racing&&R.players.length).map(R=>({code:R.code,name:R.name,roomName:R.name,mode:R.mode,n:R.players.length,max:MAX}))});
   if(m.type==='leave'){detach(p);return send(ws,{type:'left'});}
   if(['joinpub','create','joinroom'].includes(m.type)){

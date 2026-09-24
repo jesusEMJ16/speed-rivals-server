@@ -216,3 +216,15 @@ test('Old match receipts are pruned but receipts still referenced by a profile s
  pruneMatches(d);const ids=Object.keys(d.matches);
  assert.equal(ids.length,301);assert.ok(d.matches.m0,'referenced receipt kept');assert.ok(d.matches.m399);assert.equal(d.matches.m50,undefined);
 });
+test('Solo records are stored per mode, only when better and plausible, and appear in the ranking',async t=>{
+ const {url}=await boot(t),s=await guest(url,'Solista');
+ s.send({type:'score',mode:'normal',km:1.5,time:40});let r=await s.read('profiles');let me=r.profiles.find(p=>p.name==='Solista');
+ assert.equal(me.best1p,1500);assert.equal(me.bestSub,0);assert.equal(me.races,0);
+ s.send({type:'score',mode:'normal',km:1.2,time:40});r=await s.read('profiles');assert.equal(r.profiles.find(p=>p.name==='Solista').best1p,1500,'worse run keeps the best');
+ s.send({type:'score',mode:'subita',km:0.8,time:30});s.send({type:'score',mode:'supervivencia',km:2.25,time:60});
+ await s.read('profiles');r=await s.read('profiles');me=r.profiles.find(p=>p.name==='Solista');assert.equal(me.bestSub,800);assert.equal(me.bestSup,2250);
+ s.send({type:'score',mode:'normal',km:900,time:10});assert.equal((await s.read('err')).code,'INVALID_STATE','impossible speed is rejected');
+ s.send({type:'score',mode:'turbo',km:1,time:40});assert.equal((await s.read('err')).code,'INVALID_STATE','unknown mode is rejected');
+ for(let i=0;i<10;i++)s.send({type:'score',mode:'normal',km:1,time:40});
+ await new Promise(r=>setTimeout(r,150));assert.ok(s.inbox.some(m=>m.type==='err'&&m.code==='RATE_LIMIT'),'more than 10 per minute is limited');
+});

@@ -11,7 +11,7 @@ function create(count,seed,mode){
   const rng=Brain.random(seed^Math.imul(i+1,0x9e3779b9)),model=models[Math.floor(rng()*models.length)],lives=mode==='subita'?1:model.lives;
   return {id:'bot-'+seed+'-'+i,isBot:true,name:entry.name,language:entry.language,connected:true,ws:null,alive:true,d:0,lane:i%3,x:lanes[i%3],
    loadout:{car:model.car},model,rng,brain:Brain.create(seed+i,styles[i%styles.length],true),elapsed:0,base:70,speed:112,
-   lives,maxLives:lives,invuln:0,shield:0,slow:0,attackSlowT:0,attackSlowStrength:.5,lockT:0,trouble:0,heat:0,meter:100,boostT:0,boostIntent:false,
+   lives,maxLives:lives,invuln:0,shield:0,slow:0,attackSlowT:0,attackSlowStrength:.5,lockT:0,trouble:0,heat:0,meter:100,boostT:0,itemBoostT:0,boostIntent:false,
    item:null,itemAge:0,lastBotAttack:-10,obs:[],pickups:[],spawnAcc:0,nextGap:420,coins:0};
  });
 }
@@ -20,7 +20,7 @@ function receive(b,kind){
  if(b.shield&&['rayo','gancho','prisa'].includes(kind)){b.shield=0;b.invuln=Math.max(b.invuln,.35);return true;}
  if(kind==='oil'||kind==='cones'){
   for(let k=0;k<(kind==='cones'?3:1);k++)b.obs.push({t:kind==='oil'?'oil':'cone',x:lanes[b.lane],y:-170-k*95,w:kind==='oil'?64:26,h:kind==='oil'?38:30});
- }else if(kind==='emp'){b.shield=0;b.boostT=0;b.boostIntent=false;b.meter=Math.min(15,b.meter);b.trouble=Math.max(b.trouble,1);}
+ }else if(kind==='emp'){b.shield=0;b.boostT=0;b.itemBoostT=0;b.boostIntent=false;b.meter=Math.min(15,b.meter);b.trouble=Math.max(b.trouble,1);}
  else{b.attackSlowT=Math.max(b.attackSlowT,kind==='rayo'?2.5:kind==='prisa'?3:1.8);b.attackSlowStrength=kind==='rayo'?.5:kind==='prisa'?.45:.55;if(kind==='gancho')b.lockT=Math.max(b.lockT,.4);}
  return true;
 }
@@ -29,7 +29,7 @@ function spawn(b,mode){
  for(let l=0;l<3;l++)if(l!==safe&&(l===lane||b.rng()<.55)){
   const oil=b.rng()<.16;b.obs.push({t:oil?'oil':'car',x:lanes[l],y:-90-b.rng()*120,w:oil?64:40,h:oil?38:74,own:oil?0:b.speed*.15});
  }
- if(mode==='normal'&&b.rng()<.3){const pool=[...attackTypes,'shield','shield','vida'];b.pickups.push({kind:'item',item:pool[Math.floor(b.rng()*pool.length)],x:lanes[Math.floor(b.rng()*3)],y:-180});}
+ if(mode==='normal'&&b.rng()<.3){const pool=[...attackTypes,'turbo','shield','shield','vida'];b.pickups.push({kind:'item',item:pool[Math.floor(b.rng()*pool.length)],x:lanes[Math.floor(b.rng()*3)],y:-180});}
 }
 function tick(b,dt,mode,players,emit){
  if(!b.alive)return;
@@ -42,14 +42,16 @@ function tick(b,dt,mode,players,emit){
   if(!b.lockT)b.lane=decision.lane;b.boostIntent=decision.boost;
   if(decision.useItem&&b.item&&b.elapsed-b.lastBotAttack>=.75){
    const kind=b.item;
-   if(kind==='shield'){b.shield=1;b.item=null;}
+   if(kind==='turbo'){b.meter=Math.min(100,b.meter+45);b.itemBoostT=Math.max(b.itemBoostT||0,2.5);b.boostT=1;b.item=null;}
+   else if(kind==='shield'){b.shield=1;b.item=null;}
    else if(kind==='vida'){b.lives=Math.min(b.maxLives,b.lives+1);b.item=null;}
    else if(emit(b,kind,decision.target)){b.item=null;b.lastBotAttack=b.elapsed;}
    if(!b.item)b.itemAge=0;
   }
  }
- const boost=b.boostIntent&&b.meter>0&&!b.trouble;
- b.boostT=clamp(b.boostT+(boost?2:-3)*dt,0,1);b.meter=clamp(b.meter+(boost?-20/b.model.turbo:24*b.model.regen)*dt,0,100);
+ const itemTurbo=(b.itemBoostT||0)>0,manualTurbo=b.boostIntent&&b.meter>0&&!b.trouble,boost=itemTurbo||manualTurbo;
+ b.itemBoostT=Math.max(0,(b.itemBoostT||0)-dt);
+ b.boostT=itemTurbo?1:clamp(b.boostT+(boost?2:-3)*dt,0,1);b.meter=clamp(b.meter+(manualTurbo&&!itemTurbo?-20/b.model.turbo:24*b.model.regen)*dt,0,100);
  if(b.model.heat){b.heat=Math.max(0,b.heat+(boost?dt:-dt));if(b.heat>=2.5){b.heat=0;b.trouble=1.2;b.boostIntent=false;}}
  b.base=Math.min(700*b.model.vel+70,b.base+5*dt);
  const kmh=Math.min(700*b.model.vel+300,b.base+120*b.model.pow*b.boostT)*Math.min(b.slow>0?.6:1,b.attackSlowT>0?b.attackSlowStrength:1)*(b.trouble>0?.65:1);
@@ -70,9 +72,12 @@ function tick(b,dt,mode,players,emit){
 }
 function advance(room,until,emit){
  const end=Math.min(until,room.endsAt);let steps=0;
+ // Cap work per event-loop turn. Callers must wait for botTime to reach the
+ // requested deadline before freezing a result, and continue on later ticks.
  while(room.botTime<end&&steps++<100){const dt=Math.min(50,end-room.botTime)/1000;
   for(const b of room.players)if(b.isBot)tick(b,dt,room.mode,room.players,emit);
   room.botTime+=dt*1000;
  }
+ return room.botTime>=end;
 }
 module.exports={create,receive,tick,advance};

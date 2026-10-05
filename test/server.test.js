@@ -19,7 +19,7 @@ async function socket(url){
  }};
 }
 async function guest(url,name='Guest',token){const s=await socket(url);s.send({type:'hello',protocol:2,name,token});s.welcome=await s.read('welcome');return s;}
-async function pair(url){const a=await guest(url,'阿娜'),b=await guest(url,'Jesús');a.send({type:'create',roomName:'Team',priv:true,mode:'normal'});const {code}=await a.read('created');b.send({type:'joinroom',code});await b.read('joined');return {a,b,code};}
+async function pair(url,{priv=true}={}){const a=await guest(url,'阿娜'),b=await guest(url,'Jesús');a.send({type:'create',roomName:'Team',priv,mode:'normal'});const {code}=await a.read('created');b.send({type:'joinroom',code});await b.read('joined');return {a,b,code};}
 async function start(a,b){a.send({type:'startRace'});const m=await a.read('start');assert.deepEqual(await b.read('start'),m);await pause(35);return m;}
 
 test('Android association exposes only configured valid release fingerprints',async t=>{
@@ -88,7 +88,7 @@ test('manual room host controls, listing, cancellation, and late joins',async t=
  a.send({type:'leave'});await a.read('left');b.send({type:'st',matchId:m.matchId,seq:1,d:0,lane:1,alive:false});const end=await b.read('end');assert.equal(end.rank.length,2);
 });
 test('authoritative state, inventory, complete ranking, and exactly-once persistence across restart',async t=>{
- const {url,app,dir}=await boot(t),{a,b}=await pair(url),m=await start(a,b);
+ const {url,app,dir}=await boot(t),{a,b}=await pair(url,{priv:false}),m=await start(a,b);
  a.send({type:'st',matchId:m.matchId,seq:1,d:1e9,lane:1,alive:true});assert.equal((await a.read('err')).code,'INVALID_STATE');
  a.send({type:'atk',matchId:m.matchId,seq:2,kind:'rayo'});assert.equal((await a.read('err')).code,'INVALID_STATE');
  a.send({type:'pickup',matchId:m.matchId,seq:3,kind:'rayo'});assert.equal((await a.read('inventory')).item,'rayo');
@@ -109,7 +109,7 @@ test('disconnect retains standings and reconnect is a spectator without duplicat
 });
 test('failed durable commit sends no saved result and readiness fails closed until retry',async t=>{
  let fail=false,value=null;const storage={async load(){return value;},async save(v){if(fail)throw Error('disk unavailable');value=structuredClone(v);}};
- const {url,app}=await boot(t,{storage}),{a,b}=await pair(url),m=await start(a,b);fail=true;
+ const {url,app}=await boot(t,{storage}),{a,b}=await pair(url,{priv:false}),m=await start(a,b);fail=true;
  a.send({type:'st',matchId:m.matchId,seq:1,d:0,lane:1,alive:false});b.send({type:'st',matchId:m.matchId,seq:1,d:0,lane:1,alive:false});assert.equal((await a.read('err')).code,'STORAGE_UNAVAILABLE');assert.equal(a.inbox.some(m=>m.type==='end'),false);
  assert.equal((await fetch('http://127.0.0.1:'+app.address().port+'/ready')).status,503);fail=false;
  const e=await a.read('end');assert.equal(e.saved,true);assert.equal(e.rank[0].cpTotal,40);assert.equal(value.profiles[a.welcome.id].races,1);
@@ -145,7 +145,7 @@ test('invite landing safely exposes a code and only configured web link',async t
  const res=await fetch(base+'/invite/AB12CD'),html=await res.text();assert.equal(res.status,200);assert.match(html,/AB12CD/);assert.match(html,/room=AB12CD/);assert.doesNotMatch(html,/<bad>/);assert.ok(res.headers.get('content-security-policy'));assert.equal((await fetch(base+'/invite/%3Cscript%3E')).status,404);
 });
 test('reconnect after offline finish replays saved result even while lobby slot is retained',async t=>{
- const {url}=await boot(t,{durationMs:80,disconnectGraceMs:1000}),{a,b}=await pair(url),m=await start(a,b);a.ws.terminate();await b.read('end');
+ const {url}=await boot(t,{durationMs:80,disconnectGraceMs:1000}),{a,b}=await pair(url,{priv:false}),m=await start(a,b);a.ws.terminate();await b.read('end');
  const again=await guest(url,'阿娜',a.welcome.token);assert.equal((await again.read('end')).matchId,m.matchId);assert.equal(again.welcome.profile.races,1);
 });
 test('Upstash adapter writes one separate v2 key and leaves historical keys alone',async t=>{
